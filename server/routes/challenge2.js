@@ -115,7 +115,10 @@ router.get('/status', (req, res) => {
 
   } catch (error) {
     console.error('[C2] Status error:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: { en: 'Failed to get status. Please try again.', th: 'ไม่สามารถดูสถานะได้ กรุณาลองใหม่' }
+    });
   }
 });
 
@@ -182,7 +185,10 @@ router.post('/email/send-otp', async (req, res) => {
 
   } catch (error) {
     console.error('[C2] Send OTP error:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: { en: 'Failed to send OTP. Please try again.', th: 'ไม่สามารถส่ง OTP ได้ กรุณาลองใหม่' }
+    });
   }
 });
 
@@ -200,6 +206,13 @@ router.post('/email/verify-otp', otpLimiter, async (req, res) => {
 
     const db = getDatabase();
     const authState = db.prepare('SELECT * FROM auth_challenges WHERE session_id = ?').get(req.sessionId);
+
+    if (!authState) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: { en: 'Auth challenge not initialized. Start a new session.', th: 'ยังไม่ได้เริ่มต้นการยืนยันตัวตน เริ่ม session ใหม่' }
+      });
+    }
 
     if (authState.otp_verified) {
       return res.json({
@@ -285,7 +298,10 @@ router.post('/email/verify-otp', otpLimiter, async (req, res) => {
 
   } catch (error) {
     console.error('[C2] Verify OTP error:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: { en: 'OTP verification failed. Please try again.', th: 'การยืนยัน OTP ล้มเหลว กรุณาลองใหม่' }
+    });
   }
 });
 
@@ -303,6 +319,13 @@ router.post('/password', async (req, res) => {
 
     const db = getDatabase();
     const authState = db.prepare('SELECT * FROM auth_challenges WHERE session_id = ?').get(req.sessionId);
+
+    if (!authState) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: { en: 'Auth challenge not initialized. Start a new session.', th: 'ยังไม่ได้เริ่มต้นการยืนยันตัวตน เริ่ม session ใหม่' }
+      });
+    }
 
     // Check if email OTP verified first
     if (!authState.otp_verified) {
@@ -372,7 +395,10 @@ router.post('/password', async (req, res) => {
 
   } catch (error) {
     console.error('[C2] Password error:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: { en: 'Password verification failed. Please try again.', th: 'การยืนยันรหัสผ่านล้มเหลว กรุณาลองใหม่' }
+    });
   }
 });
 
@@ -390,6 +416,13 @@ router.post('/pin', pinLimiter, async (req, res) => {
 
     const db = getDatabase();
     const authState = db.prepare('SELECT * FROM auth_challenges WHERE session_id = ?').get(req.sessionId);
+
+    if (!authState) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: { en: 'Auth challenge not initialized. Start a new session.', th: 'ยังไม่ได้เริ่มต้นการยืนยันตัวตน เริ่ม session ใหม่' }
+      });
+    }
 
     // Check if password verified first
     if (!authState.password_verified) {
@@ -484,7 +517,10 @@ router.post('/pin', pinLimiter, async (req, res) => {
 
   } catch (error) {
     console.error('[C2] PIN error:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: { en: 'PIN verification failed. Please try again.', th: 'การยืนยัน PIN ล้มเหลว กรุณาลองใหม่' }
+    });
   }
 });
 
@@ -494,6 +530,13 @@ router.get('/mfa/status', (req, res) => {
     const db = getDatabase();
     const authState = db.prepare('SELECT * FROM auth_challenges WHERE session_id = ?').get(req.sessionId);
     const session = db.prepare('SELECT * FROM game_sessions WHERE id = ?').get(req.sessionId);
+
+    if (!authState || !session) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: { en: 'Session not found. Start a new session.', th: 'ไม่พบ session เริ่ม session ใหม่' }
+      });
+    }
 
     const factors = {
       email: !!authState.otp_verified,
@@ -530,7 +573,10 @@ router.get('/mfa/status', (req, res) => {
 
   } catch (error) {
     console.error('[C2] MFA status error:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: { en: 'Failed to get MFA status. Please try again.', th: 'ไม่สามารถดูสถานะ MFA ได้ กรุณาลองใหม่' }
+    });
   }
 });
 
@@ -549,6 +595,13 @@ router.post('/submit-flag', flagLimiter, (req, res) => {
     const db = getDatabase();
     const session = db.prepare('SELECT * FROM game_sessions WHERE id = ?').get(req.sessionId);
     const authState = db.prepare('SELECT * FROM auth_challenges WHERE session_id = ?').get(req.sessionId);
+
+    if (!authState || !session) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: { en: 'Session not found. Start a new session.', th: 'ไม่พบ session เริ่ม session ใหม่' }
+      });
+    }
 
     if (!(authState.otp_verified && authState.password_verified && authState.pin_verified)) {
       return res.status(400).json({
@@ -611,7 +664,10 @@ router.post('/submit-flag', flagLimiter, (req, res) => {
 
   } catch (error) {
     console.error('[C2] Flag submit error:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: { en: 'Flag submission failed. Please try again.', th: 'การส่ง Flag ล้มเหลว กรุณาลองใหม่' }
+    });
   }
 });
 

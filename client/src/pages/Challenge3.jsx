@@ -47,73 +47,6 @@ export function Challenge3() {
     }
   };
 
-  const handleExploitDelegation = async () => {
-    setLoading(true);
-    setError('');
-    setMessage('');
-    try {
-      const response = await api.post('/api/c3/request-access', {
-        resource: 'project_alpha.txt',
-        reason: 'Research collaboration'
-      });
-      setMessage(response.data.message?.[language] || response.data.message?.en || 'Access granted');
-      await fetchWhoami();
-      await fetchResources();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed');
-    }
-    setLoading(false);
-  };
-
-  const handleExploitAttribute = async () => {
-    setLoading(true);
-    setError('');
-    setMessage('');
-    try {
-      const response = await api.post('/api/c3/attributes', {
-        attribute: 'clearance_training',
-        value: 'complete'
-      });
-      setMessage('Attribute updated: clearance_training = complete');
-      await fetchWhoami();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed');
-    }
-    setLoading(false);
-  };
-
-  const handleTimeBypass = async () => {
-    setLoading(true);
-    setError('');
-    setMessage('');
-    try {
-      const response = await api.get('/api/c3/resources/8', {
-        headers: { 'X-System-Time': '02:30' }
-      });
-      setMessage('Maintenance window bypass successful! File accessed.');
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed');
-    }
-    setLoading(false);
-  };
-
-  const handleDeclassify = async () => {
-    setLoading(true);
-    setError('');
-    setMessage('');
-    try {
-      const response = await api.post('/api/c3/declassify', {
-        resource: 'FINAL_FLAG.txt',
-        requester_role: 'Director',
-        reason: 'Audit review'
-      });
-      setMessage('Declassification approved! Top Secret file accessed.');
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed');
-    }
-    setLoading(false);
-  };
-
   const handleGetFinalFlag = async () => {
     setLoading(true);
     setError('');
@@ -272,6 +205,13 @@ export function Challenge3() {
             <TerminalLine type="output">
               Attributes: <span className="text-dim">{JSON.stringify(whoami?.attributes || {})}</span>
             </TerminalLine>
+            <button
+              className="btn btn-secondary mt-2"
+              onClick={() => { fetchWhoami(); fetchResources(); setMessage('Status refreshed'); }}
+              disabled={loading}
+            >
+              {language === 'en' ? 'REFRESH STATUS' : 'รีเฟรชสถานะ'}
+            </button>
           </div>
         </div>
 
@@ -291,59 +231,111 @@ export function Challenge3() {
           </div>
         </div>
 
-        {/* Vulnerabilities to Exploit */}
+        {/* Vulnerabilities to Exploit - Hints Only */}
         <div className="mt-3 card">
-          <div className="card-title">EXPLOITATION OPTIONS</div>
+          <div className="card-title">
+            {language === 'en' ? 'VULNERABILITY HINTS' : 'คำใบ้ช่องโหว่'}
+          </div>
           <div className="card-content">
-            <div className="grid grid-2">
-              <div>
+            <TerminalLine type="output">
+              <span className="text-dim">
+                {language === 'en'
+                  ? 'Use tools like Postman, curl, or browser DevTools to exploit these vulnerabilities:'
+                  : 'ใช้เครื่องมือเช่น Postman, curl หรือ DevTools เพื่อใช้ช่องโหว่เหล่านี้:'}
+              </span>
+            </TerminalLine>
+
+            <div className="mt-2" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {/* Vulnerability 1 */}
+              <div className="code-block" style={{ padding: '10px', background: '#111', borderLeft: '3px solid #ffff00' }}>
                 <TerminalLine type="output">
                   <span className="text-yellow">1. Delegation Flaw</span>
                 </TerminalLine>
                 <TerminalLine type="output">
-                  <span className="text-dim">Request access → Get role promotion</span>
+                  <span className="text-dim">
+                    {language === 'en'
+                      ? 'The delegation system promotes your role instead of granting temporary access'
+                      : 'ระบบมอบหมายจะเลื่อนบทบาทแทนที่จะให้สิทธิ์ชั่วคราว'}
+                  </span>
                 </TerminalLine>
-                <button className="btn mt-1" onClick={handleExploitDelegation} disabled={loading}>
-                  EXPLOIT DELEGATION
-                </button>
+                <pre className="mt-1" style={{ color: '#00ff00', fontSize: '0.85rem' }}>
+{`POST /api/c3/request-access
+{
+  "resource": "???",
+  "reason": "???"
+}`}
+                </pre>
               </div>
 
-              <div>
+              {/* Vulnerability 2 */}
+              <div className="code-block" style={{ padding: '10px', background: '#111', borderLeft: '3px solid #00ffff' }}>
                 <TerminalLine type="output">
-                  <span className="text-yellow">2. Attribute Injection</span>
+                  <span className="text-cyan">2. Attribute Injection</span>
                 </TerminalLine>
                 <TerminalLine type="output">
-                  <span className="text-dim">Set clearance_training = complete</span>
+                  <span className="text-dim">
+                    {language === 'en'
+                      ? 'No authorization check when updating attributes'
+                      : 'ไม่ตรวจสอบสิทธิ์เมื่ออัพเดท attribute'}
+                  </span>
                 </TerminalLine>
-                <button className="btn mt-1" onClick={handleExploitAttribute} disabled={loading}>
-                  INJECT ATTRIBUTE
-                </button>
+                <pre className="mt-1" style={{ color: '#00ff00', fontSize: '0.85rem' }}>
+{`POST /api/c3/attributes
+{
+  "attribute": "???",
+  "value": "???"
+}`}
+                </pre>
               </div>
 
-              <div>
+              {/* Vulnerability 3 */}
+              <div className="code-block" style={{ padding: '10px', background: '#111', borderLeft: '3px solid #ff6600' }}>
                 <TerminalLine type="output">
-                  <span className="text-yellow">3. Time Header Bypass</span>
+                  <span style={{ color: '#ff6600' }}>3. Time Header Bypass</span>
                 </TerminalLine>
                 <TerminalLine type="output">
-                  <span className="text-dim">X-System-Time: 02:30 (maintenance)</span>
+                  <span className="text-dim">
+                    {language === 'en'
+                      ? 'Server trusts X-System-Time header. Maintenance window: 02:00-03:00'
+                      : 'Server เชื่อ header X-System-Time ช่วง maintenance: 02:00-03:00'}
+                  </span>
                 </TerminalLine>
-                <button className="btn mt-1" onClick={handleTimeBypass} disabled={loading}>
-                  BYPASS TIME CHECK
-                </button>
+                <pre className="mt-1" style={{ color: '#00ff00', fontSize: '0.85rem' }}>
+{`GET /api/c3/resources/{id}
+Headers: X-System-Time: ???`}
+                </pre>
               </div>
 
-              <div>
+              {/* Vulnerability 4 */}
+              <div className="code-block" style={{ padding: '10px', background: '#111', borderLeft: '3px solid #ff0066' }}>
                 <TerminalLine type="output">
-                  <span className="text-yellow">4. Declassification Bug</span>
+                  <span style={{ color: '#ff0066' }}>4. Declassification Bug</span>
                 </TerminalLine>
                 <TerminalLine type="output">
-                  <span className="text-dim">requester_role: "Director" (unvalidated)</span>
+                  <span className="text-dim">
+                    {language === 'en'
+                      ? 'requester_role from request body is not validated against actual role'
+                      : 'requester_role จาก body ไม่ได้ตรวจสอบกับบทบาทจริง'}
+                  </span>
                 </TerminalLine>
-                <button className="btn mt-1" onClick={handleDeclassify} disabled={loading}>
-                  REQUEST DECLASSIFY
-                </button>
+                <pre className="mt-1" style={{ color: '#00ff00', fontSize: '0.85rem' }}>
+{`POST /api/c3/declassify
+{
+  "resource": "???",
+  "requester_role": "???",
+  "reason": "???"
+}`}
+                </pre>
               </div>
             </div>
+
+            <TerminalLine type="output" className="mt-2">
+              <span className="text-yellow">
+                {language === 'en'
+                  ? 'Hint: You need to exploit at least 2 vulnerabilities to access Top Secret!'
+                  : 'คำใบ้: คุณต้องใช้อย่างน้อย 2 ช่องโหว่เพื่อเข้าถึง Top Secret!'}
+              </span>
+            </TerminalLine>
           </div>
         </div>
 

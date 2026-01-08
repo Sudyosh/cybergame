@@ -225,21 +225,13 @@ export function Challenge2() {
                 </>
               ) : (
                 <>
-                  {demoOTP && (
-                    <div className="mt-2 code-block">
-                      <TerminalLine type="output">
-                        <span className="text-yellow">Demo OTP: </span>
-                        <span className="text-green glow">{demoOTP}</span>
-                      </TerminalLine>
-                      <TerminalLine type="output">
-                        <span className="text-dim">
-                          {language === 'en' ?
-                            '(In production, this would be sent to your email)' :
-                            '(ในระบบจริง จะส่งไปที่อีเมลของคุณ)'}
-                        </span>
-                      </TerminalLine>
-                    </div>
-                  )}
+                  <TerminalLine type="output">
+                    <span className="text-green">
+                      {language === 'en'
+                        ? 'OTP has been sent to your email!'
+                        : 'ส่ง OTP ไปที่อีเมลของคุณแล้ว!'}
+                    </span>
+                  </TerminalLine>
                   <div className="form-group mt-2">
                     <input
                       type="text"
@@ -298,17 +290,11 @@ export function Challenge2() {
             <div className="card-content">
               <TerminalLine type="output">
                 <span className="text-dim">
-                  {factors.pin?.hint?.[language] || factors.pin?.hint?.en ||
-                    (language === 'en' ?
-                      'What is the postal code on the envelope?' :
-                      'รหัสไปรษณีย์บนซองจดหมายคืออะไร?')}
+                  {language === 'en'
+                    ? 'Enter the 5-digit PIN to complete authentication'
+                    : 'กรอก PIN 5 หลักเพื่อยืนยันตัวตน'}
                 </span>
               </TerminalLine>
-              {factors.pin?.envelope && (
-                <pre className="code-block mt-2" style={{ whiteSpace: 'pre', fontSize: '0.8rem', background: '#fff', color: '#000', padding: '10px' }}>
-                  {factors.pin.envelope}
-                </pre>
-              )}
               <TerminalLine type="output">
                 <span className="text-yellow">
                   {language === 'en' ? 'Attempts' : 'ครั้งที่ลอง'}: {factors.pin?.attempts || 0}/{factors.pin?.maxAttempts || 3}
