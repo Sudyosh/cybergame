@@ -1,14 +1,16 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { Terminal, TerminalLine } from '../components/common/Terminal';
 import { ChallengeProgress } from '../components/common/ChallengeProgress';
+import api from '../services/api';
 
 export function Dashboard() {
   const { t, language } = useLanguage();
-  const { user, refreshProgress, isAuthenticated } = useAuth();
+  const { user, refreshProgress, isAuthenticated, updateToken } = useAuth();
   const navigate = useNavigate();
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -23,6 +25,28 @@ export function Dashboard() {
 
   const handleStartChallenge = (num) => {
     navigate(`/challenge/${num}`);
+  };
+
+  const handleReset = async () => {
+    if (!window.confirm(language === 'en'
+      ? 'Are you sure you want to reset and start over? All progress will be lost.'
+      : 'คุณแน่ใจหรือไม่ว่าต้องการรีเซ็ตและเริ่มใหม่? ความคืบหน้าทั้งหมดจะหายไป')) {
+      return;
+    }
+
+    setResetting(true);
+    try {
+      const response = await api.post('/api/game/reset');
+      if (response.data.sessionToken) {
+        updateToken(response.data.sessionToken);
+        await refreshProgress();
+        navigate('/challenge/1');
+      }
+    } catch (err) {
+      console.error('Reset failed:', err);
+      alert(language === 'en' ? 'Failed to reset game' : 'รีเซ็ตเกมไม่สำเร็จ');
+    }
+    setResetting(false);
   };
 
   return (
@@ -112,6 +136,13 @@ export function Dashboard() {
                     'Congratulations! You have completed all challenges.' :
                     'ยินดีด้วย! คุณผ่านทุกด่านแล้ว'}
                 </TerminalLine>
+                <div className="mt-3">
+                  <button className="btn btn-warning" onClick={handleReset} disabled={resetting}>
+                    {resetting
+                      ? (language === 'en' ? 'RESETTING...' : 'กำลังรีเซ็ต...')
+                      : (language === 'en' ? 'RESET & PLAY AGAIN' : 'รีเซ็ตและเล่นใหม่')}
+                  </button>
+                </div>
               </>
             ) : currentChallenge === 1 ? (
               <>

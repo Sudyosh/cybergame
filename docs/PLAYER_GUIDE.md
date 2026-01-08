@@ -4,31 +4,58 @@
 
 ## เริ่มต้นใช้งาน
 
+### สำหรับ UI (Frontend)
 1. ไปที่ http://localhost:5173
 2. ลงทะเบียนและเข้าสู่ระบบ
 3. คลิก "เริ่มเกม"
+
+### สำหรับ API (Backend)
+```bash
+# 1. ลงทะเบียน
+curl -X POST http://localhost:3001/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"your_username","email":"your@email.com","password":"YourPassword123!"}'
+
+# 2. เข้าสู่ระบบ (เก็บ token ไว้)
+curl -X POST http://localhost:3001/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"your_username","password":"YourPassword123!"}'
+
+# 3. เริ่มเกม (ใช้ token จากขั้นตอนที่ 2)
+curl -X POST http://localhost:3001/api/game/start \
+  -H "Authorization: Bearer $TOKEN"
+# จะได้ token ใหม่ที่มี sessionId - ใช้ token นี้ต่อไป
+```
 
 ---
 
 ## ด่าน 1: Cryptography
 
 ### วิธีที่ 1: โหมดง่าย (แนะนำ)
-ใช้ endpoint `/api/c1/easy-decrypt` ที่จะทำทุกอย่างให้อัตโนมัติ!
+ใช้ endpoint `/api/c1/easy-decrypt` ที่จะทำ DH exchange และถอดรหัสให้อัตโนมัติ
 
 ```bash
+# ใช้ token จาก /api/game/start
 curl http://localhost:3001/api/c1/easy-decrypt \
-  -H "Authorization: Bearer $TOKEN"
+  -H "Authorization: Bearer $SESSION_TOKEN"
 ```
 
 Response จะให้:
 - `decryptedMessage`: ข้อความที่ถอดรหัสแล้ว
 - `signature`: ลายเซ็นดิจิทัล
+- `example`: โค้ด Python สำหรับคำนวณ flag
 
-แล้วสร้าง FLAG_1:
+### สร้าง FLAG_1
 ```python
 import hashlib
+
+message = "ข้อความจาก decryptedMessage"
+signature = "signature จาก response"
+
 data = message + "1990" + signature
-FLAG_1 = f"MUT{{{hashlib.sha256(data.encode()).hexdigest()[:32]}}}"
+hash_result = hashlib.sha256(data.encode()).hexdigest()[:32]
+FLAG_1 = f"MUT{{{hash_result}}}"
+print(FLAG_1)
 ```
 
 ---
@@ -111,36 +138,51 @@ curl -X POST http://localhost:3001/api/c1/submit-flag \
 
 ---
 
-## ด่าน 2: Authentication (2 ปัจจัย)
+## ด่าน 2: Authentication (3 ปัจจัย)
 
-### คำตอบ
-| ปัจจัย | คำตอบ |
+### คำใบ้
+| ปัจจัย | คำใบ้ |
 |--------|--------|
-| **รหัสผ่าน** | `Suranaree1990!` |
-| **PIN** | `30000` |
+| **Email OTP** | กรอกอีเมลจริง → จะได้ OTP และคำใบ้ทางอีเมล |
+| **รหัสผ่าน** | ดูคำใบ้แบบสลับตัวอักษรในอีเมล |
+| **PIN** | ดูซองจดหมายในอีเมล - รหัสไปรษณีย์คืออะไร? |
 
 ### วิธีทำ
 
 ```bash
-# ปัจจัยที่ 1: รหัสผ่าน
-curl -X POST http://localhost:3001/api/c2/password \
-  -H "Authorization: Bearer $TOKEN" \
+# ปัจจัยที่ 1: Email OTP
+# ส่ง OTP
+curl -X POST http://localhost:3001/api/c2/email/send-otp \
+  -H "Authorization: Bearer $SESSION_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"password": "Suranaree1990!"}'
+  -d '{"email": "test@example.com"}'
+# จะได้ demoOTP ในการตอบกลับ
 
-# ปัจจัยที่ 2: PIN
-curl -X POST http://localhost:3001/api/c2/pin \
-  -H "Authorization: Bearer $TOKEN" \
+# ยืนยัน OTP (ใช้ค่า demoOTP ที่ได้)
+curl -X POST http://localhost:3001/api/c2/email/verify-otp \
+  -H "Authorization: Bearer $SESSION_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"pin": "30000"}'
+  -d '{"otp": "123456"}'
+
+# ปัจจัยที่ 2: รหัสผ่าน (ดูคำใบ้ในอีเมล แล้วเรียงตัวอักษรให้ถูกต้อง)
+curl -X POST http://localhost:3001/api/c2/password \
+  -H "Authorization: Bearer $SESSION_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"password": "YOUR_UNSCRAMBLED_PASSWORD"}'
+
+# ปัจจัยที่ 3: PIN (ดูซองจดหมายในอีเมล - รหัสไปรษณีย์คืออะไร?)
+curl -X POST http://localhost:3001/api/c2/pin \
+  -H "Authorization: Bearer $SESSION_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"pin": "YOUR_POSTAL_CODE"}'
 
 # รับ FLAG_2
 curl http://localhost:3001/api/c2/mfa/status \
-  -H "Authorization: Bearer $TOKEN"
+  -H "Authorization: Bearer $SESSION_TOKEN"
 
-# ส่ง FLAG_2
+# ส่ง FLAG_2 (หรือใช้ช่องกรอกใน UI)
 curl -X POST http://localhost:3001/api/c2/submit-flag \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "Authorization: Bearer $SESSION_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"flag": "MUT{...}"}'
 ```
@@ -191,8 +233,8 @@ curl -X POST http://localhost:3001/api/c3/submit-flag \
 |--------|-----|
 | ปีก่อตั้ง มทส. | 1990 |
 | รหัสไปรษณีย์นครราชสีมา | 30000 |
-| รหัสผ่าน | Suranaree1990! |
-| PIN | 30000 |
+| รหัสผ่าน | ดูคำใบ้ในอีเมล (ตัวอักษรสลับ) |
+| PIN | ดูซองจดหมายในอีเมล |
 
 ---
 

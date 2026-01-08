@@ -7,7 +7,7 @@ import { authMiddleware, challengeGate, generateToken } from '../middleware/auth
 import { flagLimiter } from '../middleware/rateLimit.js';
 import cryptoService from '../services/cryptoService.js';
 import flagService from '../services/flagService.js';
-import { STORY } from '../config/constants.js';
+import { STORY, SUT_DATA } from '../config/constants.js';
 
 const router = Router();
 
@@ -364,12 +364,14 @@ router.get('/easy-decrypt', async (req, res) => {
     const encryptedData = cryptoService.encryptAES(artifacts.secret_message, aesKey, iv);
     const signature = cryptoService.signRSA(artifacts.secret_message, artifacts.rsa_private_key);
 
-    // Update database
-    db.prepare(`
+    // Update database - mark exchange as complete
+    const updateResult = db.prepare(`
       UPDATE crypto_artifacts
       SET dh_client_public = ?, dh_shared_secret = ?, aes_encrypted_data = ?, rsa_signature = ?, exchange_complete = 1, artifact_downloaded = 1
       WHERE session_id = ?
     `).run(clientPublic.toString(16), sharedSecretHex, encryptedData, signature, sessionId);
+
+    console.log(`[C1] Easy decrypt - session ${sessionId}: updated ${updateResult.changes} rows`);
 
     // Log
     db.prepare(`
@@ -381,22 +383,31 @@ router.get('/easy-decrypt', async (req, res) => {
       success: true,
       mode: 'easy',
       message: {
-        en: 'Easy mode: DH exchange done automatically! Here is the decrypted message.',
-        th: 'โหมดง่าย: ทำ DH exchange ให้อัตโนมัติแล้ว! นี่คือข้อความที่ถอดรหัสแล้ว'
+        en: 'Easy mode: DH exchange and decryption done automatically!',
+        th: 'โหมดง่าย: ทำ DH exchange และถอดรหัสให้อัตโนมัติแล้ว!'
       },
       decryptedMessage: artifacts.secret_message,
       signature: signature,
-      flagFormula: {
-        en: 'FLAG_1 = MUT{SHA256(message + "1990" + signature)[:32]}',
-        th: 'FLAG_1 = MUT{SHA256(message + "1990" + signature)[:32]}'
-      },
-      example: {
-        en: 'Use Python: hashlib.sha256((message + "1990" + signature).encode()).hexdigest()[:32]',
-        th: 'ใช้ Python: hashlib.sha256((message + "1990" + signature).encode()).hexdigest()[:32]'
-      },
-      hint: {
-        en: 'Just concatenate the message + "1990" + signature, then SHA256 hash it, take first 32 chars, wrap with MUT{}',
-        th: 'แค่ต่อ message + "1990" + signature แล้ว hash ด้วย SHA256 ตัด 32 ตัวแรก ครอบด้วย MUT{}'
+      hints: {
+        formula: 'FLAG_1 = MUT{SHA256(message + "1990" + signature)[:32]}',
+        steps: {
+          en: [
+            '1. Concatenate: message + "1990" + signature',
+            '2. Hash it with SHA256',
+            '3. Take first 32 characters of the hex result',
+            '4. Wrap with MUT{...}'
+          ],
+          th: [
+            '1. ต่อกัน: message + "1990" + signature',
+            '2. Hash ด้วย SHA256',
+            '3. ตัดเอา 32 ตัวอักษรแรกของผลลัพธ์ hex',
+            '4. ครอบด้วย MUT{...}'
+          ]
+        },
+        python: {
+          en: 'Use module: hashlib, function: sha256(), method: .hexdigest()',
+          th: 'ใช้ module: hashlib, function: sha256(), method: .hexdigest()'
+        }
       }
     });
 
@@ -436,17 +447,26 @@ router.post('/submit-flag', flagLimiter, (req, res) => {
     const db = getDatabase();
     const artifacts = db.prepare('SELECT * FROM crypto_artifacts WHERE session_id = ?').get(sessionId);
 
-    if (!artifacts || !artifacts.exchange_complete) {
+    if (!artifacts) {
       return res.status(400).json({
         error: 'Bad Request',
-        message: 'Complete the challenge steps first'
+        message: 'No artifacts found. Call /api/c1/artifacts or /api/c1/easy-decrypt first',
+        hint: 'สำหรับโหมดง่าย: GET /api/c1/easy-decrypt'
       });
     }
 
-    // Generate expected flag
+    if (!artifacts.exchange_complete) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'DH exchange not complete. Call /api/c1/easy-decrypt or complete the DH exchange manually',
+        hint: 'สำหรับโหมดง่าย: GET /api/c1/easy-decrypt'
+      });
+    }
+
+    // Generate expected flag using: SHA256(message + "1990" + signature)
     const expectedFlag = flagService.generateFlag1(
       sessionId,
-      artifacts.dh_shared_secret,
+      artifacts.secret_message,
       artifacts.rsa_signature
     );
 
@@ -469,9 +489,10 @@ router.post('/submit-flag', flagLimiter, (req, res) => {
         UPDATE game_sessions SET challenge_1_complete = 1, flag_1 = ? WHERE id = ?
       `).run(flag, sessionId);
 
-      // Generate new token with updated progress
+      // Generate new token with updated progress (exclude old iat and exp)
+      const { iat, exp, ...userWithoutExp } = req.user;
       const newToken = generateToken({
-        ...req.user,
+        ...userWithoutExp,
         challenge1Complete: true
       });
 

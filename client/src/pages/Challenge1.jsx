@@ -165,10 +165,57 @@ export function Challenge1() {
           </div>
         )}
 
-        {/* Instructions */}
+        {/* API Info */}
         {artifacts && step < 6 && (
           <div className="mt-3 card">
-            <div className="card-title">INSTRUCTIONS</div>
+            <div className="card-title">API SERVER</div>
+            <div className="card-content">
+              <TerminalLine type="output">
+                <span className="text-cyan">Base URL: </span>
+                <span className="text-yellow">http://localhost:3001</span>
+              </TerminalLine>
+              <TerminalLine type="output">
+                <span className="text-dim">
+                  {language === 'en'
+                    ? 'Use curl, Postman, or any HTTP client to call the API'
+                    : 'ใช้ curl, Postman หรือ HTTP client ใดก็ได้ในการเรียก API'}
+                </span>
+              </TerminalLine>
+            </div>
+          </div>
+        )}
+
+        {/* Easy Mode Hint */}
+        {artifacts && step < 6 && (
+          <div className="mt-3 card" style={{ borderColor: 'var(--text-green)' }}>
+            <div className="card-title" style={{ color: 'var(--text-green)' }}>
+              {language === 'en' ? 'EASY MODE' : 'โหมดง่าย'}
+            </div>
+            <div className="card-content">
+              <TerminalLine type="output">
+                <span className="text-green">
+                  {language === 'en'
+                    ? 'Try: GET /api/c1/easy-decrypt'
+                    : 'ลอง: GET /api/c1/easy-decrypt'}
+                </span>
+              </TerminalLine>
+              <TerminalLine type="output">
+                <span className="text-dim">
+                  {language === 'en'
+                    ? 'This endpoint will help you skip the complex cryptography steps.'
+                    : 'endpoint นี้จะช่วยข้ามขั้นตอน cryptography ที่ซับซ้อน'}
+                </span>
+              </TerminalLine>
+            </div>
+          </div>
+        )}
+
+        {/* Hard Mode Instructions */}
+        {artifacts && step < 6 && (
+          <div className="mt-3 card">
+            <div className="card-title">
+              {language === 'en' ? 'HARD MODE (Manual cryptography)' : 'โหมดยาก (ทำ cryptography เอง)'}
+            </div>
             <div className="card-content">
               <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem' }}>
                 {language === 'en' ? `

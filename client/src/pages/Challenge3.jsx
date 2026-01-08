@@ -18,6 +18,7 @@ export function Challenge3() {
   const [message, setMessage] = useState('');
   const [flag, setFlag] = useState('');
   const [victory, setVictory] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     if (!user?.progress?.challenge2) {
@@ -142,6 +143,28 @@ export function Challenge3() {
     setLoading(false);
   };
 
+  const handleReset = async () => {
+    if (!window.confirm(language === 'en'
+      ? 'Are you sure you want to reset and start over? All progress will be lost.'
+      : 'คุณแน่ใจหรือไม่ว่าต้องการรีเซ็ตและเริ่มใหม่? ความคืบหน้าทั้งหมดจะหายไป')) {
+      return;
+    }
+
+    setResetting(true);
+    try {
+      const response = await api.post('/api/game/reset');
+      if (response.data.sessionToken) {
+        updateToken(response.data.sessionToken);
+        await refreshProgress();
+        navigate('/challenge/1');
+      }
+    } catch (err) {
+      console.error('Reset failed:', err);
+      alert(language === 'en' ? 'Failed to reset game' : 'รีเซ็ตเกมไม่สำเร็จ');
+    }
+    setResetting(false);
+  };
+
   if (victory) {
     return (
       <div className="main-content">
@@ -195,9 +218,16 @@ export function Challenge3() {
               <div className="text-green glow">{flag}</div>
             </div>
 
-            <button className="btn mt-3" onClick={() => navigate('/dashboard')}>
-              RETURN TO DASHBOARD
-            </button>
+            <div className="mt-3" style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+              <button className="btn" onClick={() => navigate('/dashboard')}>
+                RETURN TO DASHBOARD
+              </button>
+              <button className="btn btn-warning" onClick={handleReset} disabled={resetting}>
+                {resetting
+                  ? (language === 'en' ? 'RESETTING...' : 'กำลังรีเซ็ต...')
+                  : (language === 'en' ? 'RESET & PLAY AGAIN' : 'รีเซ็ตและเล่นใหม่')}
+              </button>
+            </div>
           </div>
         </Terminal>
       </div>

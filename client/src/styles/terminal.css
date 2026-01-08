@@ -317,6 +317,17 @@ body {
   box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
 }
 
+.btn-warning {
+  border-color: var(--text-yellow);
+  color: var(--text-yellow);
+}
+
+.btn-warning:hover {
+  background: var(--text-yellow);
+  color: var(--bg-primary);
+  box-shadow: 0 0 20px rgba(255, 255, 0, 0.5);
+}
+
 /* Forms */
 .form-group {
   margin-bottom: var(--spacing-md);

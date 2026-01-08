@@ -17,11 +17,14 @@ export function Challenge2() {
   const [message, setMessage] = useState('');
 
   // Form states
+  const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [demoOTP, setDemoOTP] = useState('');
   const [password, setPassword] = useState('');
   const [pin, setPin] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpSetup, setOtpSetup] = useState(null);
   const [flag, setFlag] = useState('');
+  const [flagInput, setFlagInput] = useState('');
   const [mfaComplete, setMfaComplete] = useState(false);
 
   useEffect(() => {
@@ -37,11 +40,45 @@ export function Challenge2() {
       const response = await api.get('/api/c2/status');
       setStatus(response.data);
       setMfaComplete(response.data.mfaComplete);
+      if (response.data.mfaComplete) {
+        handleGetFlag();
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch status');
     }
   };
 
+  // Factor 1: Email OTP
+  const handleSendOTP = async () => {
+    setLoading(true);
+    setError('');
+    setMessage('');
+    try {
+      const response = await api.post('/api/c2/email/send-otp', { email });
+      setMessage(response.data.message?.[language] || response.data.message?.en || 'OTP sent');
+      setOtpSent(true);
+      setDemoOTP(response.data.demoOTP || '');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to send OTP');
+    }
+    setLoading(false);
+  };
+
+  const handleVerifyOTP = async () => {
+    setLoading(true);
+    setError('');
+    setMessage('');
+    try {
+      const response = await api.post('/api/c2/email/verify-otp', { otp });
+      setMessage(response.data.message?.[language] || response.data.message?.en || 'Verified');
+      await fetchStatus();
+    } catch (err) {
+      setError(err.response?.data?.message || err.response?.data?.hint?.[language] || 'Failed');
+    }
+    setLoading(false);
+  };
+
+  // Factor 2: Password
   const handleVerifyPassword = async () => {
     setLoading(true);
     setError('');
@@ -56,6 +93,7 @@ export function Challenge2() {
     setLoading(false);
   };
 
+  // Factor 3: PIN
   const handleVerifyPin = async () => {
     setLoading(true);
     setError('');
@@ -63,6 +101,10 @@ export function Challenge2() {
     try {
       const response = await api.post('/api/c2/pin', { pin });
       setMessage(response.data.message?.[language] || 'Verified');
+      if (response.data.mfaComplete) {
+        setMfaComplete(true);
+        await handleGetFlag();
+      }
       await fetchStatus();
     } catch (err) {
       setError(err.response?.data?.message || err.response?.data?.hint?.[language] || 'Failed');
@@ -70,60 +112,31 @@ export function Challenge2() {
     setLoading(false);
   };
 
-  const handleSetupOTP = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const response = await api.get('/api/c2/otp/setup');
-      setOtpSetup(response.data);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to setup OTP');
-    }
-    setLoading(false);
-  };
-
-  const handleVerifyOTP = async () => {
-    setLoading(true);
-    setError('');
-    setMessage('');
-    try {
-      const response = await api.post('/api/c2/otp/verify', { otp });
-      setMessage(response.data.message?.[language] || 'Verified');
-      if (response.data.mfaComplete) {
-        setMfaComplete(true);
-      }
-      await fetchStatus();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed');
-    }
-    setLoading(false);
-  };
-
   const handleGetFlag = async () => {
-    setLoading(true);
-    setError('');
     try {
       const response = await api.get('/api/c2/mfa/status');
       if (response.data.flag2) {
         setFlag(response.data.flag2);
+        setFlagInput(response.data.flag2);
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to get flag');
+      console.error('Failed to get flag:', err);
     }
-    setLoading(false);
   };
 
   const handleSubmitFlag = async () => {
     setLoading(true);
     setError('');
     try {
-      const response = await api.post('/api/c2/submit-flag', { flag });
+      const response = await api.post('/api/c2/submit-flag', { flag: flagInput });
       if (response.data.correct) {
         if (response.data.newToken) {
           updateToken(response.data.newToken);
         }
         await refreshProgress();
-        setMessage('FLAG_2 CORRECT! Challenge 2 Complete!');
+        setMessage(language === 'en' ? 'FLAG_2 CORRECT! Challenge 2 Complete!' : 'FLAG_2 ถูกต้อง! ด่าน 2 เสร็จสมบูรณ์!');
+      } else {
+        setError(response.data.message?.[language] || 'Incorrect flag');
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed');
@@ -151,124 +164,80 @@ export function Challenge2() {
           <TerminalLine type="output">
             <span className="text-dim">
               {language === 'en' ?
-                'Prove your identity through Multi-Factor Authentication' :
-                'พิสูจน์ตัวตนผ่านการยืนยันหลายปัจจัย'}
+                'Prove your identity through 3-Factor Authentication' :
+                'พิสูจน์ตัวตนผ่านการยืนยัน 3 ปัจจัย'}
             </span>
           </TerminalLine>
         </div>
 
         {/* Status Display */}
         <div className="mt-3 grid grid-3">
-          <div className={`card ${factors.password?.verified ? 'status-success' : ''}`}>
+          <div className={`card ${factors.email?.verified ? 'status-success' : ''}`}>
             <div className="text-center">
               <div className="text-cyan">FACTOR 1</div>
+              <div className="text-white">Email OTP</div>
+              <div>{factors.email?.verified ? '✓' : '○'}</div>
+            </div>
+          </div>
+          <div className={`card ${factors.password?.verified ? 'status-success' : ''}`}>
+            <div className="text-center">
+              <div className="text-cyan">FACTOR 2</div>
               <div className="text-white">Password</div>
               <div>{factors.password?.verified ? '✓' : '○'}</div>
             </div>
           </div>
           <div className={`card ${factors.pin?.verified ? 'status-success' : ''}`}>
             <div className="text-center">
-              <div className="text-cyan">FACTOR 2</div>
+              <div className="text-cyan">FACTOR 3</div>
               <div className="text-white">PIN</div>
               <div>{factors.pin?.verified ? '✓' : '○'}</div>
             </div>
           </div>
-          <div className={`card ${factors.otp?.verified ? 'status-success' : ''}`}>
-            <div className="text-center">
-              <div className="text-cyan">FACTOR 3</div>
-              <div className="text-white">OTP</div>
-              <div>{factors.otp?.verified ? '✓' : '○'}</div>
-            </div>
-          </div>
         </div>
 
-        {/* Factor 1: Password */}
-        {!factors.password?.verified && (
+        {/* Factor 1: Email OTP */}
+        {!factors.email?.verified && (
           <div className="mt-3 card">
-            <div className="card-title">FACTOR 1: PASSWORD</div>
+            <div className="card-title">FACTOR 1: EMAIL OTP</div>
             <div className="card-content">
               <TerminalLine type="output">
                 <span className="text-dim">
-                  {factors.password?.hint?.[language] || factors.password?.hint?.en ||
-                    'Hint: The name of our university combined with its birth year...'}
+                  {language === 'en' ?
+                    'Enter your email to receive a one-time password' :
+                    'กรอกอีเมลเพื่อรับรหัสผ่านครั้งเดียว'}
                 </span>
               </TerminalLine>
-              <div className="form-group mt-2">
-                <input
-                  type="password"
-                  className="form-input"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password"
-                />
-              </div>
-              <button className="btn" onClick={handleVerifyPassword} disabled={loading}>
-                {loading ? 'VERIFYING...' : 'VERIFY PASSWORD'}
-              </button>
-            </div>
-          </div>
-        )}
 
-        {/* Factor 2: PIN */}
-        {factors.password?.verified && !factors.pin?.verified && (
-          <div className="mt-3 card">
-            <div className="card-title">FACTOR 2: PIN</div>
-            <div className="card-content">
-              <TerminalLine type="output">
-                <span className="text-dim">
-                  {factors.pin?.hint?.[language] || factors.pin?.hint?.en ||
-                    'Hint: The postal code of our sacred location (5 digits)...'}
-                </span>
-              </TerminalLine>
-              <TerminalLine type="output">
-                <span className="text-yellow">
-                  Attempts: {factors.pin?.attempts || 0}/{factors.pin?.maxAttempts || 3}
-                </span>
-              </TerminalLine>
-              <div className="form-group mt-2">
-                <input
-                  type="text"
-                  className="form-input"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  placeholder="Enter 5-digit PIN"
-                  maxLength={5}
-                />
-              </div>
-              <button className="btn" onClick={handleVerifyPin} disabled={loading}>
-                {loading ? 'VERIFYING...' : 'VERIFY PIN'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Factor 3: OTP */}
-        {factors.pin?.verified && !factors.otp?.verified && (
-          <div className="mt-3 card">
-            <div className="card-title">FACTOR 3: OTP (TIME-BASED)</div>
-            <div className="card-content">
-              {!otpSetup ? (
+              {!otpSent ? (
                 <>
-                  <TerminalLine type="output">
-                    <span className="text-dim">
-                      Your FLAG_1 generates the OTP secret. Click to setup.
-                    </span>
-                  </TerminalLine>
-                  <button className="btn mt-2" onClick={handleSetupOTP} disabled={loading}>
-                    SETUP OTP
+                  <div className="form-group mt-2">
+                    <input
+                      type="email"
+                      className="form-input"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder={language === 'en' ? 'Enter email address' : 'กรอกอีเมล'}
+                    />
+                  </div>
+                  <button className="btn" onClick={handleSendOTP} disabled={loading || !email}>
+                    {loading ? 'SENDING...' : language === 'en' ? 'SEND OTP' : 'ส่ง OTP'}
                   </button>
                 </>
               ) : (
                 <>
-                  <TerminalLine type="output">
-                    <span className="text-cyan">OTP Secret (Base32):</span>
-                  </TerminalLine>
-                  <div className="code-block mt-1">
-                    {otpSetup.secret}
-                  </div>
-                  {otpSetup.qrCode && (
-                    <div className="mt-2 text-center">
-                      <img src={otpSetup.qrCode} alt="OTP QR Code" style={{ maxWidth: '200px' }} />
+                  {demoOTP && (
+                    <div className="mt-2 code-block">
+                      <TerminalLine type="output">
+                        <span className="text-yellow">Demo OTP: </span>
+                        <span className="text-green glow">{demoOTP}</span>
+                      </TerminalLine>
+                      <TerminalLine type="output">
+                        <span className="text-dim">
+                          {language === 'en' ?
+                            '(In production, this would be sent to your email)' :
+                            '(ในระบบจริง จะส่งไปที่อีเมลของคุณ)'}
+                        </span>
+                      </TerminalLine>
                     </div>
                   )}
                   <div className="form-group mt-2">
@@ -277,12 +246,15 @@ export function Challenge2() {
                       className="form-input"
                       value={otp}
                       onChange={(e) => setOtp(e.target.value)}
-                      placeholder="Enter 6-digit OTP"
+                      placeholder={language === 'en' ? 'Enter 6-digit OTP' : 'กรอก OTP 6 หลัก'}
                       maxLength={6}
                     />
                   </div>
-                  <button className="btn" onClick={handleVerifyOTP} disabled={loading}>
-                    VERIFY OTP
+                  <button className="btn" onClick={handleVerifyOTP} disabled={loading || !otp}>
+                    {loading ? 'VERIFYING...' : language === 'en' ? 'VERIFY OTP' : 'ยืนยัน OTP'}
+                  </button>
+                  <button className="btn btn-secondary ml-2" onClick={() => { setOtpSent(false); setDemoOTP(''); }}>
+                    {language === 'en' ? 'RESEND' : 'ส่งใหม่'}
                   </button>
                 </>
               )}
@@ -290,34 +262,115 @@ export function Challenge2() {
           </div>
         )}
 
-        {/* MFA Complete - Get Flag */}
-        {mfaComplete && !flag && (
+        {/* Factor 2: Password */}
+        {factors.email?.verified && !factors.password?.verified && (
           <div className="mt-3 card">
-            <div className="card-title">MFA COMPLETE!</div>
+            <div className="card-title">FACTOR 2: PASSWORD</div>
+            <div className="card-content">
+              <TerminalLine type="output">
+                <span className="text-dim">
+                  {factors.password?.hint?.[language] || factors.password?.hint?.en ||
+                    (language === 'en' ?
+                      'Check your email for the scrambled password hint' :
+                      'ดูคำใบ้รหัสผ่านแบบสลับตัวอักษรในอีเมล')}
+                </span>
+              </TerminalLine>
+              <div className="form-group mt-2">
+                <input
+                  type="password"
+                  className="form-input"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={language === 'en' ? 'Enter password' : 'กรอกรหัสผ่าน'}
+                />
+              </div>
+              <button className="btn" onClick={handleVerifyPassword} disabled={loading}>
+                {loading ? 'VERIFYING...' : language === 'en' ? 'VERIFY PASSWORD' : 'ยืนยันรหัสผ่าน'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Factor 3: PIN */}
+        {factors.password?.verified && !factors.pin?.verified && (
+          <div className="mt-3 card">
+            <div className="card-title">FACTOR 3: PIN</div>
+            <div className="card-content">
+              <TerminalLine type="output">
+                <span className="text-dim">
+                  {factors.pin?.hint?.[language] || factors.pin?.hint?.en ||
+                    (language === 'en' ?
+                      'What is the postal code on the envelope?' :
+                      'รหัสไปรษณีย์บนซองจดหมายคืออะไร?')}
+                </span>
+              </TerminalLine>
+              {factors.pin?.envelope && (
+                <pre className="code-block mt-2" style={{ whiteSpace: 'pre', fontSize: '0.8rem', background: '#fff', color: '#000', padding: '10px' }}>
+                  {factors.pin.envelope}
+                </pre>
+              )}
+              <TerminalLine type="output">
+                <span className="text-yellow">
+                  {language === 'en' ? 'Attempts' : 'ครั้งที่ลอง'}: {factors.pin?.attempts || 0}/{factors.pin?.maxAttempts || 3}
+                </span>
+              </TerminalLine>
+              <div className="form-group mt-2">
+                <input
+                  type="text"
+                  className="form-input"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  placeholder={language === 'en' ? 'Enter 5-digit PIN' : 'กรอก PIN 5 หลัก'}
+                  maxLength={5}
+                />
+              </div>
+              <button className="btn" onClick={handleVerifyPin} disabled={loading}>
+                {loading ? 'VERIFYING...' : language === 'en' ? 'VERIFY PIN' : 'ยืนยัน PIN'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* MFA Complete - Show Flag */}
+        {mfaComplete && (
+          <div className="mt-3 card">
+            <div className="card-title">
+              {language === 'en' ? 'MFA COMPLETE!' : 'MFA เสร็จสมบูรณ์!'}
+            </div>
             <div className="card-content">
               <TerminalLine type="output">
                 <span className="text-green glow">
                   {language === 'en' ? 'All 3 factors verified!' : 'ยืนยันครบ 3 ปัจจัยแล้ว!'}
                 </span>
               </TerminalLine>
-              <button className="btn mt-2" onClick={handleGetFlag} disabled={loading}>
-                REVEAL FLAG_2
-              </button>
-            </div>
-          </div>
-        )}
 
-        {/* Flag Display & Submit */}
-        {flag && (
-          <div className="mt-3">
-            <div className="flag-display">
-              <div className="text-cyan">FLAG_2:</div>
-              <div className="text-green glow">{flag}</div>
-            </div>
-            <div className="mt-2">
-              <button className="btn" onClick={handleSubmitFlag} disabled={loading}>
-                SUBMIT FLAG_2
-              </button>
+              {flag && (
+                <div className="mt-2 flag-display">
+                  <div className="text-cyan">FLAG_2:</div>
+                  <div className="text-green glow">{flag}</div>
+                </div>
+              )}
+
+              {/* Flag Input Field */}
+              <div className="mt-3">
+                <TerminalLine type="output">
+                  <span className="text-dim">
+                    {language === 'en' ? 'Enter FLAG_2 to submit:' : 'กรอก FLAG_2 เพื่อส่ง:'}
+                  </span>
+                </TerminalLine>
+                <div className="form-group mt-2">
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={flagInput}
+                    onChange={(e) => setFlagInput(e.target.value)}
+                    placeholder="MUT{...}"
+                  />
+                </div>
+                <button className="btn" onClick={handleSubmitFlag} disabled={loading || !flagInput}>
+                  {loading ? 'SUBMITTING...' : language === 'en' ? 'SUBMIT FLAG_2' : 'ส่ง FLAG_2'}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -330,7 +383,7 @@ export function Challenge2() {
             </TerminalLine>
             <div className="mt-2">
               <button className="btn" onClick={() => navigate('/challenge/3')}>
-                PROCEED TO CHALLENGE 3
+                {language === 'en' ? 'PROCEED TO CHALLENGE 3' : 'ไปด่าน 3'}
               </button>
             </div>
           </div>
@@ -344,7 +397,7 @@ export function Challenge2() {
 
         {error && (
           <TerminalLine type="error" className="mt-2">
-            [ERROR] {error}
+            [ERROR] {typeof error === 'object' ? (error[language] || error.en || JSON.stringify(error)) : error}
           </TerminalLine>
         )}
       </Terminal>

@@ -11,16 +11,17 @@
     "reset": "node ../scripts/reset.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "helmet": "^7.1.0",
-    "sql.js": "^1.10.0",
-    "jsonwebtoken": "^9.0.2",
     "bcryptjs": "^2.4.3",
-    "speakeasy": "^2.0.0",
-    "qrcode": "^1.5.3",
-    "express-rate-limit": "^7.1.5",
+    "cors": "^2.8.5",
     "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^7.0.12",
+    "qrcode": "^1.5.3",
+    "speakeasy": "^2.0.0",
+    "sql.js": "^1.10.0",
     "uuid": "^9.0.1"
   },
   "devDependencies": {

@@ -184,7 +184,7 @@ router.post('/session/start', async (req, res) => {
     const sessionId = result.lastInsertRowid;
 
     // Initialize Challenge 2 auth record
-    const challengePassword = `Suranaree${SUT_DATA.yearEstablished}!`; // "Suranaree1990!"
+    const challengePassword = 'computer_engineering_#28!'; // New password for Challenge 2
     const passwordHash = await bcrypt.hash(challengePassword, AUTH_CONFIG.password.saltRounds);
     const pinHash = await bcrypt.hash(SUT_DATA.postalCode, AUTH_CONFIG.password.saltRounds);
 

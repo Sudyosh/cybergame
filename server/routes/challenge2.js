@@ -1,13 +1,14 @@
 // MUT Secure Vault - Challenge 2 Routes (Entity Authentication)
-// Implements: Password, PIN, OTP, MFA
+// Implements: Email OTP, Password, PIN - 3 Factor Authentication
 
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { getDatabase } from '../config/database.js';
 import { authMiddleware, challengeGate, generateToken } from '../middleware/auth.js';
 import { flagLimiter, pinLimiter, otpLimiter } from '../middleware/rateLimit.js';
-import otpService from '../services/otpService.js';
 import flagService from '../services/flagService.js';
+import emailService from '../services/emailService.js';
 import { STORY, AUTH_CONFIG, SUT_DATA } from '../config/constants.js';
 
 const router = Router();
@@ -16,6 +17,14 @@ const router = Router();
 router.use(authMiddleware);
 router.use(challengeGate(2));
 
+// Store OTPs in memory (in production, use Redis or database)
+const otpStore = new Map();
+
+// Generate 6-digit OTP
+function generateOTP() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
 // GET /api/c2/story - Get challenge story
 router.get('/story', (req, res) => {
   res.json({
@@ -23,25 +32,17 @@ router.get('/story', (req, res) => {
     description: STORY.challenge2.description,
     objectives: {
       en: [
-        'Verify password (Factor 1: Something you know)',
-        'Verify PIN (Factor 2: Something unique)',
-        'Complete Multi-Factor Authentication (2 factors)'
+        'Verify Email OTP (Factor 1: Something you receive)',
+        'Verify Password (Factor 2: Something you know)',
+        'Verify PIN (Factor 3: Something unique)',
+        'Complete 3-Factor Authentication'
       ],
       th: [
-        'ยืนยันรหัสผ่าน (ปัจจัยที่ 1: สิ่งที่คุณรู้)',
-        'ยืนยัน PIN (ปัจจัยที่ 2: สิ่งที่ไม่ซ้ำใคร)',
-        'ทำ Multi-Factor Authentication ให้สำเร็จ (2 ปัจจัย)'
+        'ยืนยัน Email OTP (ปัจจัยที่ 1: สิ่งที่คุณได้รับ)',
+        'ยืนยันรหัสผ่าน (ปัจจัยที่ 2: สิ่งที่คุณรู้)',
+        'ยืนยัน PIN (ปัจจัยที่ 3: สิ่งที่ไม่ซ้ำใคร)',
+        'ทำ 3-Factor Authentication ให้สำเร็จ'
       ]
-    },
-    easyHints: {
-      password: {
-        en: 'Password = Suranaree + 1990 + ! → "Suranaree1990!"',
-        th: 'รหัสผ่าน = Suranaree + 1990 + ! → "Suranaree1990!"'
-      },
-      pin: {
-        en: 'PIN = Postal code of Nakhon Ratchasima = 30000',
-        th: 'PIN = รหัสไปรษณีย์นครราชสีมา = 30000'
-      }
     }
   });
 });
@@ -74,27 +75,42 @@ router.get('/status', (req, res) => {
       }
     }
 
+    const emailVerified = !!authState.otp_verified; // reuse otp_verified for email OTP
+    const passwordVerified = !!authState.password_verified;
+    const pinVerified = !!authState.pin_verified;
+
+    // Generate envelope hint
+    const envelopeHint = emailService.generateEnvelopeHint();
+
     res.json({
       factors: {
+        email: {
+          verified: emailVerified,
+          hint: !emailVerified ? {
+            en: 'Enter your email to receive OTP code and hints',
+            th: 'กรอกอีเมลเพื่อรับรหัส OTP และคำใบ้'
+          } : null
+        },
         password: {
-          verified: !!authState.password_verified,
-          hint: !authState.password_verified ? {
-            en: 'Password = "Suranaree1990!" (University name + year + !)',
-            th: 'รหัสผ่าน = "Suranaree1990!" (ชื่อมหาวิทยาลัย + ปี + !)'
+          verified: passwordVerified,
+          hint: emailVerified && !passwordVerified ? {
+            en: 'Check your email for the scrambled password hint',
+            th: 'ดูคำใบ้รหัสผ่านแบบสลับตัวอักษรในอีเมล'
           } : null
         },
         pin: {
-          verified: !!authState.pin_verified,
+          verified: pinVerified,
           attempts: authState.pin_attempts,
           maxAttempts: AUTH_CONFIG.pin.maxAttempts,
-          hint: !authState.pin_verified ? {
-            en: 'PIN = "30000" (Nakhon Ratchasima postal code)',
-            th: 'PIN = "30000" (รหัสไปรษณีย์นครราชสีมา)'
-          } : null
+          hint: passwordVerified && !pinVerified ? {
+            en: 'What is the postal code on the envelope?',
+            th: 'รหัสไปรษณีย์บนซองจดหมายคืออะไร?'
+          } : null,
+          envelope: passwordVerified && !pinVerified ? envelopeHint : null
         }
       },
-      mfaComplete: !!(authState.password_verified && authState.pin_verified),
-      progress: `${[authState.password_verified, authState.pin_verified].filter(Boolean).length}/2 factors complete`
+      mfaComplete: !!(emailVerified && passwordVerified && pinVerified),
+      progress: `${[emailVerified, passwordVerified, pinVerified].filter(Boolean).length}/3 factors complete`
     });
 
   } catch (error) {
@@ -103,7 +119,177 @@ router.get('/status', (req, res) => {
   }
 });
 
-// POST /api/c2/password - Verify password (Factor 1)
+// POST /api/c2/email/send-otp - Send OTP to email (Factor 1)
+router.post('/email/send-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Email required'
+      });
+    }
+
+    // Generate OTP
+    const otp = generateOTP();
+    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
+
+    // Store OTP (in memory for demo, in production use database/Redis)
+    otpStore.set(req.sessionId, {
+      otp,
+      email,
+      expiresAt,
+      attempts: 0
+    });
+
+    const db = getDatabase();
+
+    // Log attempt
+    db.prepare(`
+      INSERT INTO audit_log (session_id, player_id, action, details, timestamp)
+      VALUES (?, ?, 'C2_EMAIL_OTP_SENT', ?, datetime('now'))
+    `).run(req.sessionId, req.user.playerId, JSON.stringify({ email }));
+
+    // Send real email with OTP and hints
+    const emailResult = await emailService.sendOTPEmail(email, otp);
+
+    // Generate scrambled password hint for response
+    const scrambledHint = emailService.generatePasswordHint('computer_engineering_#28!');
+
+    res.json({
+      success: true,
+      message: {
+        en: `OTP and hints sent to ${email}! Check your inbox.`,
+        th: `ส่ง OTP และคำใบ้ไปที่ ${email} แล้ว! ตรวจสอบกล่องจดหมาย`
+      },
+      emailSent: emailResult.success,
+      previewUrl: emailResult.previewUrl || null, // For Ethereal test emails
+      // Also show OTP for convenience (can remove in production)
+      demoOTP: otp,
+      expiresIn: '5 minutes',
+      hints: {
+        password: {
+          en: `Unscramble: ${scrambledHint}`,
+          th: `เรียงใหม่: ${scrambledHint}`
+        },
+        pin: {
+          en: 'Check the envelope in your email - what is the postal code?',
+          th: 'ดูซองจดหมายในอีเมล - รหัสไปรษณีย์คืออะไร?'
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('[C2] Send OTP error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// POST /api/c2/email/verify-otp - Verify email OTP (Factor 1)
+router.post('/email/verify-otp', otpLimiter, async (req, res) => {
+  try {
+    const { otp } = req.body;
+
+    if (!otp) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'OTP required'
+      });
+    }
+
+    const db = getDatabase();
+    const authState = db.prepare('SELECT * FROM auth_challenges WHERE session_id = ?').get(req.sessionId);
+
+    if (authState.otp_verified) {
+      return res.json({
+        success: true,
+        message: { en: 'Email OTP already verified', th: 'ยืนยัน Email OTP แล้ว' },
+        factor: 1,
+        nextHint: {
+          en: 'Check your email for the scrambled password hint',
+          th: 'ดูคำใบ้รหัสผ่านแบบสลับตัวอักษรในอีเมล'
+        }
+      });
+    }
+
+    // Get stored OTP
+    const storedData = otpStore.get(req.sessionId);
+
+    if (!storedData) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'No OTP sent. Send OTP first.',
+        hint: 'POST /api/c2/email/send-otp'
+      });
+    }
+
+    // Check if expired
+    if (Date.now() > storedData.expiresAt) {
+      otpStore.delete(req.sessionId);
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: { en: 'OTP expired. Request a new one.', th: 'OTP หมดอายุ ขอใหม่' }
+      });
+    }
+
+    // Verify OTP
+    const isValid = otp === storedData.otp;
+
+    // Log attempt
+    db.prepare(`
+      INSERT INTO audit_log (session_id, player_id, action, details, timestamp)
+      VALUES (?, ?, 'C2_EMAIL_OTP_VERIFY', ?, datetime('now'))
+    `).run(req.sessionId, req.user.playerId, JSON.stringify({ success: isValid }));
+
+    if (isValid) {
+      // Mark as verified (reuse otp_verified column)
+      db.prepare('UPDATE auth_challenges SET otp_verified = 1 WHERE session_id = ?').run(req.sessionId);
+      otpStore.delete(req.sessionId);
+
+      // Generate scrambled hint
+      const scrambledHint = emailService.generatePasswordHint('computer_engineering_#28!');
+
+      return res.json({
+        success: true,
+        message: {
+          en: 'Email OTP verified! Factor 1 complete.',
+          th: 'ยืนยัน Email OTP สำเร็จ! ปัจจัยที่ 1 เสร็จสมบูรณ์'
+        },
+        factor: 1,
+        nextHint: {
+          en: `Unscramble: ${scrambledHint}`,
+          th: `เรียงใหม่: ${scrambledHint}`
+        }
+      });
+    }
+
+    // Increment attempts
+    storedData.attempts++;
+    if (storedData.attempts >= 5) {
+      otpStore.delete(req.sessionId);
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: { en: 'Too many attempts. Request a new OTP.', th: 'ลองมากเกินไป ขอ OTP ใหม่' }
+      });
+    }
+
+    res.status(401).json({
+      success: false,
+      message: {
+        en: 'Incorrect OTP',
+        th: 'OTP ไม่ถูกต้อง'
+      },
+      attemptsRemaining: 5 - storedData.attempts
+    });
+
+  } catch (error) {
+    console.error('[C2] Verify OTP error:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// POST /api/c2/password - Verify password (Factor 2)
 router.post('/password', async (req, res) => {
   try {
     const { password } = req.body;
@@ -118,11 +304,25 @@ router.post('/password', async (req, res) => {
     const db = getDatabase();
     const authState = db.prepare('SELECT * FROM auth_challenges WHERE session_id = ?').get(req.sessionId);
 
+    // Check if email OTP verified first
+    if (!authState.otp_verified) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: { en: 'Verify Email OTP first (Factor 1)', th: 'ยืนยัน Email OTP ก่อน (ปัจจัยที่ 1)' }
+      });
+    }
+
     if (authState.password_verified) {
+      const envelopeHint = emailService.generateEnvelopeHint();
       return res.json({
         success: true,
         message: { en: 'Password already verified', th: 'ยืนยันรหัสผ่านแล้ว' },
-        factor: 1
+        factor: 2,
+        nextHint: {
+          en: 'What is the postal code on the envelope?',
+          th: 'รหัสไปรษณีย์บนซองจดหมายคืออะไร?'
+        },
+        envelope: envelopeHint
       });
     }
 
@@ -138,19 +338,25 @@ router.post('/password', async (req, res) => {
     if (isValid) {
       db.prepare('UPDATE auth_challenges SET password_verified = 1 WHERE session_id = ?').run(req.sessionId);
 
+      const envelopeHint = emailService.generateEnvelopeHint();
+
       return res.json({
         success: true,
         message: {
-          en: 'Password verified! Factor 1 complete.',
-          th: 'ยืนยันรหัสผ่านสำเร็จ! ปัจจัยที่ 1 เสร็จสมบูรณ์'
+          en: 'Password verified! Factor 2 complete.',
+          th: 'ยืนยันรหัสผ่านสำเร็จ! ปัจจัยที่ 2 เสร็จสมบูรณ์'
         },
-        factor: 1,
+        factor: 2,
         nextHint: {
-          en: 'Now verify your PIN (postal code of Nakhon Ratchasima)',
-          th: 'ต่อไปยืนยัน PIN (รหัสไปรษณีย์ของนครราชสีมา)'
-        }
+          en: 'What is the postal code on the envelope?',
+          th: 'รหัสไปรษณีย์บนซองจดหมายคืออะไร?'
+        },
+        envelope: envelopeHint
       });
     }
+
+    // Generate scrambled hint for failed attempt
+    const scrambledHint = emailService.generatePasswordHint('computer_engineering_#28!');
 
     res.status(401).json({
       success: false,
@@ -159,8 +365,8 @@ router.post('/password', async (req, res) => {
         th: 'รหัสผ่านไม่ถูกต้อง'
       },
       hint: {
-        en: 'Try: [UniversityName][Year]! (e.g., Suranaree1990!)',
-        th: 'ลอง: [ชื่อมหาวิทยาลัย][ปี]! (เช่น Suranaree1990!)'
+        en: `Unscramble: ${scrambledHint}`,
+        th: `เรียงใหม่: ${scrambledHint}`
       }
     });
 
@@ -170,7 +376,7 @@ router.post('/password', async (req, res) => {
   }
 });
 
-// POST /api/c2/pin - Verify PIN (Factor 2)
+// POST /api/c2/pin - Verify PIN (Factor 3)
 router.post('/pin', pinLimiter, async (req, res) => {
   try {
     const { pin } = req.body;
@@ -185,11 +391,19 @@ router.post('/pin', pinLimiter, async (req, res) => {
     const db = getDatabase();
     const authState = db.prepare('SELECT * FROM auth_challenges WHERE session_id = ?').get(req.sessionId);
 
+    // Check if password verified first
+    if (!authState.password_verified) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: { en: 'Verify Password first (Factor 2)', th: 'ยืนยันรหัสผ่านก่อน (ปัจจัยที่ 2)' }
+      });
+    }
+
     if (authState.pin_verified) {
       return res.json({
         success: true,
         message: { en: 'PIN already verified', th: 'ยืนยัน PIN แล้ว' },
-        factor: 2
+        factor: 3
       });
     }
 
@@ -237,23 +451,22 @@ router.post('/pin', pinLimiter, async (req, res) => {
     `).run(req.sessionId, req.user.playerId, JSON.stringify({ success: isValid, attempt: newAttempts }));
 
     if (isValid) {
-      db.prepare('UPDATE auth_challenges SET pin_verified = 1, pin_attempts = 0 WHERE session_id = ?').run(req.sessionId);
+      db.prepare('UPDATE auth_challenges SET pin_verified = 1, pin_attempts = 0, mfa_complete = 1 WHERE session_id = ?').run(req.sessionId);
 
       return res.json({
         success: true,
         message: {
-          en: 'PIN verified! Factor 2 complete.',
-          th: 'ยืนยัน PIN สำเร็จ! ปัจจัยที่ 2 เสร็จสมบูรณ์'
+          en: 'PIN verified! Factor 3 complete. MFA Complete!',
+          th: 'ยืนยัน PIN สำเร็จ! ปัจจัยที่ 3 เสร็จสมบูรณ์ MFA เสร็จสมบูรณ์!'
         },
-        factor: 2,
-        nextHint: {
-          en: 'Now verify OTP. Your FLAG_1 generates the TOTP secret.',
-          th: 'ต่อไปยืนยัน OTP FLAG_1 ของคุณสร้าง TOTP secret'
-        }
+        factor: 3,
+        mfaComplete: true
       });
     }
 
     db.prepare('UPDATE auth_challenges SET pin_attempts = ? WHERE session_id = ?').run(newAttempts, req.sessionId);
+
+    const envelopeHint = emailService.generateEnvelopeHint();
 
     res.status(401).json({
       success: false,
@@ -263,9 +476,10 @@ router.post('/pin', pinLimiter, async (req, res) => {
       },
       attemptsRemaining: AUTH_CONFIG.pin.maxAttempts - newAttempts,
       hint: {
-        en: 'The PIN is a 5-digit postal code. Think Nakhon Ratchasima...',
-        th: 'PIN คือรหัสไปรษณีย์ 5 หลัก ลองคิดถึงนครราชสีมา...'
-      }
+        en: 'What is the postal code on the envelope?',
+        th: 'รหัสไปรษณีย์บนซองจดหมายคืออะไร?'
+      },
+      envelope: envelopeHint
     });
 
   } catch (error) {
@@ -274,135 +488,7 @@ router.post('/pin', pinLimiter, async (req, res) => {
   }
 });
 
-// GET /api/c2/otp/setup - Get OTP setup info
-router.get('/otp/setup', async (req, res) => {
-  try {
-    const db = getDatabase();
-    const session = db.prepare('SELECT * FROM game_sessions WHERE id = ?').get(req.sessionId);
-
-    if (!session.flag_1) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Complete Challenge 1 first to get FLAG_1',
-        hint: 'FLAG_1 is used to generate your OTP secret'
-      });
-    }
-
-    const authState = db.prepare('SELECT * FROM auth_challenges WHERE session_id = ?').get(req.sessionId);
-
-    // Generate OTP secret from FLAG_1
-    const secretData = otpService.generateSecretFromFlag(session.flag_1);
-
-    // Store secret
-    db.prepare('UPDATE auth_challenges SET otp_secret = ? WHERE session_id = ?').run(secretData.base32, req.sessionId);
-
-    // Generate QR code
-    const qrData = await otpService.generateQRCode(secretData.base32, req.user.username);
-
-    res.json({
-      success: true,
-      message: {
-        en: 'OTP setup ready. Scan QR code or enter secret manually.',
-        th: 'ตั้งค่า OTP พร้อม สแกน QR code หรือใส่ secret ด้วยตนเอง'
-      },
-      qrCode: qrData.qrCode,
-      secret: secretData.base32,
-      instructions: otpService.getOTPHint(session.flag_1),
-      algorithm: 'TOTP',
-      digits: AUTH_CONFIG.otp.digits,
-      period: AUTH_CONFIG.otp.step
-    });
-
-  } catch (error) {
-    console.error('[C2] OTP setup error:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
-
-// POST /api/c2/otp/verify - Verify OTP (Factor 3)
-router.post('/otp/verify', otpLimiter, (req, res) => {
-  try {
-    const { otp } = req.body;
-
-    if (!otp) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'OTP code required'
-      });
-    }
-
-    const db = getDatabase();
-    const authState = db.prepare('SELECT * FROM auth_challenges WHERE session_id = ?').get(req.sessionId);
-
-    if (authState.otp_verified) {
-      return res.json({
-        success: true,
-        message: { en: 'OTP already verified', th: 'ยืนยัน OTP แล้ว' },
-        factor: 3
-      });
-    }
-
-    if (!authState.otp_secret) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Setup OTP first (GET /api/c2/otp/setup)'
-      });
-    }
-
-    // Verify OTP
-    const isValid = otpService.verifyTOTP(authState.otp_secret, otp);
-
-    // Log attempt
-    db.prepare(`
-      INSERT INTO audit_log (session_id, player_id, action, details, timestamp)
-      VALUES (?, ?, 'C2_OTP_ATTEMPT', ?, datetime('now'))
-    `).run(req.sessionId, req.user.playerId, JSON.stringify({ success: isValid }));
-
-    if (isValid) {
-      db.prepare('UPDATE auth_challenges SET otp_verified = 1 WHERE session_id = ?').run(req.sessionId);
-
-      // Check if MFA complete (all 3 factors)
-      const updated = db.prepare('SELECT * FROM auth_challenges WHERE session_id = ?').get(req.sessionId);
-      const mfaComplete = updated.password_verified && updated.pin_verified && updated.otp_verified;
-
-      if (mfaComplete) {
-        db.prepare('UPDATE auth_challenges SET mfa_complete = 1 WHERE session_id = ?').run(req.sessionId);
-      }
-
-      return res.json({
-        success: true,
-        message: {
-          en: 'OTP verified! Factor 3 complete.',
-          th: 'ยืนยัน OTP สำเร็จ! ปัจจัยที่ 3 เสร็จสมบูรณ์'
-        },
-        factor: 3,
-        mfaComplete: mfaComplete,
-        nextHint: mfaComplete ? {
-          en: 'MFA Complete! Get your FLAG_2.',
-          th: 'MFA เสร็จสมบูรณ์! รับ FLAG_2 ของคุณ'
-        } : null
-      });
-    }
-
-    res.status(401).json({
-      success: false,
-      message: {
-        en: 'Incorrect OTP',
-        th: 'OTP ไม่ถูกต้อง'
-      },
-      hint: {
-        en: 'OTP changes every 30 seconds. Make sure your time is synchronized.',
-        th: 'OTP เปลี่ยนทุก 30 วินาที ตรวจสอบให้แน่ใจว่าเวลาตรงกัน'
-      }
-    });
-
-  } catch (error) {
-    console.error('[C2] OTP verify error:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
-
-// GET /api/c2/mfa/status - Check MFA completion
+// GET /api/c2/mfa/status - Check MFA completion and get FLAG_2
 router.get('/mfa/status', (req, res) => {
   try {
     const db = getDatabase();
@@ -410,11 +496,12 @@ router.get('/mfa/status', (req, res) => {
     const session = db.prepare('SELECT * FROM game_sessions WHERE id = ?').get(req.sessionId);
 
     const factors = {
+      email: !!authState.otp_verified,
       password: !!authState.password_verified,
       pin: !!authState.pin_verified
     };
 
-    const mfaComplete = factors.password && factors.pin;
+    const mfaComplete = factors.email && factors.password && factors.pin;
 
     let flag2 = null;
     if (mfaComplete && session.flag_1) {
@@ -431,12 +518,13 @@ router.get('/mfa/status', (req, res) => {
         en: 'MFA Complete! Here is your FLAG_2.',
         th: 'MFA เสร็จสมบูรณ์! นี่คือ FLAG_2 ของคุณ'
       } : {
-        en: `Complete both factors. Progress: ${Object.values(factors).filter(Boolean).length}/2`,
-        th: `ทำให้ครบทั้ง 2 ปัจจัย ความคืบหน้า: ${Object.values(factors).filter(Boolean).length}/2`
+        en: `Complete all 3 factors. Progress: ${Object.values(factors).filter(Boolean).length}/3`,
+        th: `ทำให้ครบทั้ง 3 ปัจจัย ความคืบหน้า: ${Object.values(factors).filter(Boolean).length}/3`
       },
-      easyHints: !mfaComplete ? {
-        password: !factors.password ? 'Suranaree1990!' : null,
-        pin: !factors.pin ? '30000' : null
+      hints: !mfaComplete ? {
+        email: !factors.email ? { en: 'Send OTP to your email', th: 'ส่ง OTP ไปที่อีเมล' } : null,
+        password: !factors.password ? { en: 'Check your email for scrambled hint', th: 'ดูคำใบ้แบบสลับในอีเมล' } : null,
+        pin: !factors.pin ? { en: 'Postal code on the envelope', th: 'รหัสไปรษณีย์บนซอง' } : null
       } : null
     });
 
@@ -462,10 +550,10 @@ router.post('/submit-flag', flagLimiter, (req, res) => {
     const session = db.prepare('SELECT * FROM game_sessions WHERE id = ?').get(req.sessionId);
     const authState = db.prepare('SELECT * FROM auth_challenges WHERE session_id = ?').get(req.sessionId);
 
-    if (!(authState.password_verified && authState.pin_verified)) {
+    if (!(authState.otp_verified && authState.password_verified && authState.pin_verified)) {
       return res.status(400).json({
         error: 'Bad Request',
-        message: 'Complete MFA first (both password and PIN factors)'
+        message: 'Complete MFA first (all 3 factors: Email OTP, Password, PIN)'
       });
     }
 
@@ -484,9 +572,10 @@ router.post('/submit-flag', flagLimiter, (req, res) => {
         UPDATE game_sessions SET challenge_2_complete = 1, flag_2 = ? WHERE id = ?
       `).run(flag, req.sessionId);
 
-      // Generate new token
+      // Generate new token (exclude old iat and exp)
+      const { iat, exp, ...userWithoutExp } = req.user;
       const newToken = generateToken({
-        ...req.user,
+        ...userWithoutExp,
         challenge1Complete: true,
         challenge2Complete: true
       });

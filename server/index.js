@@ -13,6 +13,7 @@ import { apiLimiter } from './middleware/rateLimit.js';
 
 // Routes
 import authRoutes from './routes/auth.js';
+import gameRoutes from './routes/game.js';
 import challenge1Routes from './routes/challenge1.js';
 import challenge2Routes from './routes/challenge2.js';
 import challenge3Routes from './routes/challenge3.js';
@@ -154,6 +155,7 @@ app.get('/api/docs', (req, res) => {
 
 // Mount route handlers
 app.use('/api/auth', authRoutes);
+app.use('/api/game', gameRoutes);
 app.use('/api/c1', challenge1Routes);
 app.use('/api/c2', challenge2Routes);
 app.use('/api/c3', challenge3Routes);

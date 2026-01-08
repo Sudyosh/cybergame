@@ -4,13 +4,35 @@
 
 ---
 
-## สรุปการปรับปรุง (ฉบับง่าย)
+## สรุปการปรับปรุง
 
-| ด่าน | เวอร์ชันเดิม | เวอร์ชันใหม่ (ง่าย) |
-|------|-------------|---------------------|
-| **ด่าน 1** | ต้องทำ DH exchange เอง, ถอดรหัส AES เอง | มี `/easy-decrypt` ที่ทำให้อัตโนมัติ |
-| **ด่าน 2** | 3 ปัจจัย (Password, PIN, OTP) | 2 ปัจจัย (Password, PIN) |
-| **ด่าน 3** | 4 ช่องโหว่ | 2 ช่องโหว่ (delegation, declassify) |
+| ด่าน | รายละเอียด |
+|------|------------|
+| **ด่าน 1** | มี `/easy-decrypt` ที่ทำ DH + ถอดรหัสให้อัตโนมัติ แต่ต้องคำนวณ flag เอง |
+| **ด่าน 2** | 3 ปัจจัย (Email OTP, Password, PIN) พร้อมคำใบ้และช่องกรอก flag |
+| **ด่าน 3** | 2 ช่องโหว่ (delegation, declassify) พร้อมคำแนะนำทีละขั้นตอน |
+
+---
+
+## ขั้นตอนเริ่มต้น (สำหรับทุกด่าน)
+
+```bash
+# 1. ลงทะเบียน
+curl -X POST http://localhost:3001/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"student1","email":"student1@test.com","password":"Test123!"}'
+
+# 2. เข้าสู่ระบบ
+curl -X POST http://localhost:3001/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"student1","password":"Test123!"}'
+# -> บันทึก token
+
+# 3. เริ่มเกม (สำคัญ!)
+curl -X POST http://localhost:3001/api/game/start \
+  -H "Authorization: Bearer $TOKEN"
+# -> ใช้ token ใหม่ที่ได้จากนี้ไปต่อ (มี sessionId)
+```
 
 ---
 
@@ -18,31 +40,44 @@
 
 ### โหมดง่าย (แนะนำสำหรับผู้เริ่มต้น)
 ```bash
-# 1. เรียก easy-decrypt (ทำ DH และถอดรหัสให้อัตโนมัติ)
+# เรียก easy-decrypt (ทำ DH และถอดรหัสให้อัตโนมัติ)
 curl http://localhost:3001/api/c1/easy-decrypt \
-  -H "Authorization: Bearer $TOKEN"
+  -H "Authorization: Bearer $SESSION_TOKEN"
 ```
 
 Response:
 ```json
 {
-  "decryptedMessage": "The legacy of Suranaree lives on...",
+  "success": true,
+  "decryptedMessage": "THE LEGACY OF SURANAREE LIVES ON...",
   "signature": "abc123...",
-  "flagFormula": "FLAG_1 = MUT{SHA256(message + \"1990\" + signature)[:32]}"
+  "flagFormula": "FLAG_1 = MUT{SHA256(message + \"1990\" + signature)[:32]}",
+  "example": { "python": "..." }
 }
 ```
 
-### สร้าง FLAG_1
+### คำนวณ FLAG_1
 ```python
 import hashlib
 
-message = "ข้อความจาก decryptedMessage"
-signature = "signature จาก response"
+message = "THE LEGACY OF SURANAREE LIVES ON..."  # จาก decryptedMessage
+signature = "abc123..."  # จาก signature
 
 data = message + "1990" + signature
 hash_result = hashlib.sha256(data.encode()).hexdigest()[:32]
 FLAG_1 = f"MUT{{{hash_result}}}"
+print(FLAG_1)
 ```
+
+### ส่ง FLAG_1
+```bash
+curl -X POST http://localhost:3001/api/c1/submit-flag \
+  -H "Authorization: Bearer $SESSION_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"flag": "MUT{calculated_hash_here}"}'
+```
+
+**หมายเหตุ**: โหมดง่ายไม่ให้ FLAG มาเลย ต้องคำนวณเองตามสูตร
 
 ---
 
@@ -238,29 +273,49 @@ print(result)
 
 ## ด่าน 2: Authentication - เฉลย
 
-### คำตอบ (2 ปัจจัย)
+### คำตอบ (3 ปัจจัย)
 | ปัจจัย | คำตอบ | ที่มา |
 |--------|--------|--------|
-| รหัสผ่าน | `Suranaree1990!` | ชื่อมหาวิทยาลัย + ปี + ! |
-| PIN | `30000` | รหัสไปรษณีย์นครราชสีมา |
+| Email OTP | กรอกอีเมลจริง → ได้ OTP + คำใบ้ทางอีเมล | การยืนยันตัวตนผ่านอีเมล |
+| รหัสผ่าน | `computer_engineering_#28!` | ใบ้แบบสลับตัวอักษรในอีเมล |
+| PIN | `30000` | รหัสไปรษณีย์บนซองจดหมาย (มทส. นครราชสีมา) |
 
 ### วิธีทำ
 ```bash
-# 1. ยืนยันรหัสผ่าน
-curl -X POST http://localhost:3001/api/c2/password \
-  -H "Authorization: Bearer $TOKEN" \
+# 1. ส่ง Email OTP
+curl -X POST http://localhost:3001/api/c2/email/send-otp \
+  -H "Authorization: Bearer $SESSION_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"password": "Suranaree1990!"}'
+  -d '{"email": "test@test.com"}'
+# -> จะได้ demoOTP ในการตอบกลับ (เช่น "123456")
 
-# 2. ยืนยัน PIN
+# 2. ยืนยัน OTP
+curl -X POST http://localhost:3001/api/c2/email/verify-otp \
+  -H "Authorization: Bearer $SESSION_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"otp": "123456"}'  # ใช้ค่า demoOTP ที่ได้
+
+# 3. ยืนยันรหัสผ่าน (ดูคำใบ้แบบสลับตัวอักษรในอีเมล)
+curl -X POST http://localhost:3001/api/c2/password \
+  -H "Authorization: Bearer $SESSION_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"password": "computer_engineering_#28!"}'
+
+# 4. ยืนยัน PIN
 curl -X POST http://localhost:3001/api/c2/pin \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "Authorization: Bearer $SESSION_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"pin": "30000"}'
 
-# 3. รับ FLAG_2
+# 5. รับ FLAG_2
 curl http://localhost:3001/api/c2/mfa/status \
-  -H "Authorization: Bearer $TOKEN"
+  -H "Authorization: Bearer $SESSION_TOKEN"
+
+# 6. ส่ง FLAG_2 (หรือใช้ช่องกรอกใน UI)
+curl -X POST http://localhost:3001/api/c2/submit-flag \
+  -H "Authorization: Bearer $SESSION_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"flag": "MUT{...}"}'
 ```
 
 ---
@@ -344,6 +399,6 @@ curl http://localhost:3001/api/admin/audit \
 |-----|----------|
 | 1990 | ปีก่อตั้ง มทส. |
 | 30000 | รหัสไปรษณีย์นครราชสีมา |
-| Suranaree1990! | รหัสผ่าน |
+| computer_engineering_#28! | รหัสผ่านด่าน 2 (ใบ้แบบสลับตัวอักษร) |
 | SUT1990 | Salt สำหรับ AES key |
 | MUT_ADMIN_1990 | Admin key |

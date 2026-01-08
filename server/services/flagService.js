@@ -22,16 +22,13 @@ class FlagService {
   }
 
   // ==================== FLAG 1: Cryptography ====================
+  // Simple formula: SHA256(message + "1990" + signature)[:32]
+  // This allows students to calculate the flag themselves
 
-  generateFlag1(sessionId, sharedSecret, signature) {
-    const hash = this.generateHash([
-      this.masterSeed,
-      'CHALLENGE_1',
-      sessionId.toString(),
-      sharedSecret,
-      signature,
-      SUT_DATA.yearEstablished.toString()
-    ]);
+  generateFlag1(sessionId, message, signature) {
+    // Simple concatenation: message + "1990" + signature
+    const data = message + SUT_DATA.yearEstablished.toString() + signature;
+    const hash = crypto.createHash('sha256').update(data).digest('hex');
     return this.formatFlag(hash);
   }
 
