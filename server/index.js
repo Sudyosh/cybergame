@@ -56,10 +56,50 @@ app.use(express.urlencoded({ extended: true }));
 // Rate limiting
 app.use('/api', apiLimiter);
 
-// Request logging
+// Request logging middleware
 app.use((req, res, next) => {
+  const startTime = Date.now();
   const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] ${req.method} ${req.path}`);
+
+  // Log incoming request
+  console.log(`\n[${timestamp}] ─── REQUEST ───`);
+  console.log(`  ${req.method} ${req.path}`);
+  console.log(`  Headers: ${JSON.stringify({
+    'content-type': req.headers['content-type'],
+    'authorization': req.headers.authorization ? 'Bearer ***' : 'none'
+  })}`);
+
+  // Log body for POST/PUT requests (hide password)
+  if (['POST', 'PUT', 'PATCH'].includes(req.method) && req.body) {
+    const safeBody = { ...req.body };
+    if (safeBody.password) safeBody.password = '***';
+    if (safeBody.pin) safeBody.pin = '***';
+    console.log(`  Body: ${JSON.stringify(safeBody)}`);
+  }
+
+  // Capture response
+  const originalSend = res.send;
+  res.send = function(body) {
+    const duration = Date.now() - startTime;
+    console.log(`[${new Date().toISOString()}] ─── RESPONSE ───`);
+    console.log(`  Status: ${res.statusCode}`);
+    console.log(`  Duration: ${duration}ms`);
+
+    // Log error responses
+    if (res.statusCode >= 400) {
+      try {
+        const parsed = JSON.parse(body);
+        console.log(`  Error: ${parsed.error || 'Unknown'}`);
+        console.log(`  Message: ${parsed.message || 'No message'}`);
+      } catch (e) {
+        console.log(`  Body: ${body?.substring?.(0, 200) || body}`);
+      }
+    }
+    console.log('');
+
+    return originalSend.call(this, body);
+  };
+
   next();
 });
 

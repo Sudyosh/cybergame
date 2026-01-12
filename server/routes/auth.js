@@ -67,10 +67,12 @@ router.post('/register', authLimiter, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[Auth] Registration error:', error);
+    console.error('[Auth] Registration error:', error.message);
+    console.error('[Auth] Stack:', error.stack);
     res.status(500).json({
       error: 'Internal Server Error',
-      message: 'Registration failed'
+      message: 'Registration failed',
+      debug: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

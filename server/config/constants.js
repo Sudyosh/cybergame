@@ -27,7 +27,7 @@ export const CRYPTO_CONFIG = {
   hash: {
     algorithm: 'sha256'
   },
-  salt: `SUT${SUT_DATA.yearEstablished}` // "SUT1990"
+  salt: 'suranaree'
 };
 
 // Authentication constants

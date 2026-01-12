@@ -94,15 +94,20 @@ async function sendOTPEmail(email, otp) {
 <html>
 <head>
   <style>
-    body { font-family: 'Courier New', monospace; background: #0a0a0a; color: #00ff00; padding: 20px; }
-    .container { max-width: 600px; margin: 0 auto; border: 1px solid #00ff00; padding: 20px; }
-    .header { text-align: center; border-bottom: 1px solid #00ff00; padding-bottom: 15px; }
-    .otp-box { background: #001100; padding: 20px; margin: 20px 0; text-align: center; }
-    .otp-code { font-size: 32px; letter-spacing: 8px; color: #00ff00; }
-    .hint-box { background: #111; padding: 15px; margin: 15px 0; border-left: 3px solid #ffff00; }
-    .envelope { font-family: monospace; white-space: pre; background: #fff; color: #000; padding: 10px; margin: 10px 0; }
-    .warning { color: #ff6600; }
-    .cyan { color: #00ffff; }
+    body { font-family: 'Courier New', monospace; background: #1a1a2e; color: #eee; padding: 20px; }
+    .container { max-width: 600px; margin: 0 auto; border: 2px solid #00ff88; padding: 20px; background: #16213e; }
+    .header { text-align: center; border-bottom: 2px solid #00ff88; padding-bottom: 15px; }
+    .header h1 { color: #00ff88; margin: 0; }
+    .header p { color: #e94560; }
+    .otp-box { background: #0f3460; padding: 20px; margin: 20px 0; text-align: center; border-radius: 8px; }
+    .otp-code { font-size: 36px; letter-spacing: 10px; color: #00ff88; font-weight: bold; }
+    .hint-box { background: #1a1a40; padding: 15px; margin: 15px 0; border-left: 4px solid #ffcc00; border-radius: 4px; }
+    .hint-box p { color: #fff; margin: 8px 0; }
+    .hint-box strong { color: #ffcc00; font-size: 16px; }
+    .envelope { font-family: monospace; white-space: pre; background: #fff; color: #000; padding: 15px; margin: 10px 0; border-radius: 4px; font-size: 14px; }
+    .warning { color: #ff6b6b; font-size: 12px; }
+    .cyan { color: #00d4ff; font-weight: bold; font-size: 16px; }
+    .small-hint { color: #aaa; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -113,15 +118,15 @@ async function sendOTPEmail(email, otp) {
     </div>
 
     <div class="otp-box">
-      <p>Your One-Time Password (OTP):</p>
+      <p style="color: #fff;">Your One-Time Password (OTP):</p>
       <div class="otp-code">${otp}</div>
-      <p style="color: #888; font-size: 12px;">Valid for 5 minutes</p>
+      <p class="small-hint">Valid for 5 minutes</p>
     </div>
 
     <div class="hint-box">
       <p class="cyan">FACTOR 2 HINT - Password:</p>
       <p>Unscramble this: <strong>${passwordHint}</strong></p>
-      <p style="color: #888; font-size: 12px;">Hint: It's about a field of study with a number</p>
+      <p class="small-hint">Hint: It's about a field of study with a number</p>
     </div>
 
     <div class="hint-box">

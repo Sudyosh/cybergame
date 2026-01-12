@@ -259,7 +259,7 @@ router.get('/walkthrough', adminAuth, (req, res) => {
         '3. Generate client DH keypair',
         '4. POST /api/c1/dh/exchange with client public key',
         '5. Compute shared secret: S = server_public^client_private mod prime',
-        '6. Derive AES key: SHA256(shared_secret + "SUT1990")[:32]',
+        '6. Derive AES key: SHA256(shared_secret + "suranaree")[:32]',
         '7. GET /api/c1/encrypted - Get AES encrypted data',
         '8. Decrypt using AES-256-CBC with derived key and provided IV',
         '9. GET /api/c1/signature - Get RSA signature',
@@ -268,7 +268,7 @@ router.get('/walkthrough', adminAuth, (req, res) => {
         '12. POST /api/c1/submit-flag with FLAG_1'
       ],
       hints: [
-        'The salt "SUT1990" is mentioned in the artifact hints',
+        'The salt "suranaree" is mentioned in the artifact hints',
         'Use crypto libraries like CryptoJS or Node.js crypto'
       ]
     },

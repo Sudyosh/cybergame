@@ -22,12 +22,13 @@ class FlagService {
   }
 
   // ==================== FLAG 1: Cryptography ====================
-  // Simple formula: SHA256(message + "1990" + signature)[:32]
+  // Simple formula: SHA256(message + "27072533" + signature)[:32]
+  // 27072533 = 27/07/2533 (Buddhist Era) = July 27, 1990 (SUT founding date)
   // This allows students to calculate the flag themselves
 
   generateFlag1(sessionId, message, signature) {
-    // Simple concatenation: message + "1990" + signature
-    const data = message + SUT_DATA.yearEstablished.toString() + signature;
+    // Simple concatenation: message + "27072533" + signature
+    const data = message + '27072533' + signature;
     const hash = crypto.createHash('sha256').update(data).digest('hex');
     return this.formatFlag(hash);
   }

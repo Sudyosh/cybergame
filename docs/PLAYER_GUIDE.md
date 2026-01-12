@@ -1,4 +1,4 @@
-# MUT Secure Vault - คู่มือผู้เล่น (ฉบับง่าย)
+# MUT Secure Vault - คู่มือผู้เล่น
 
 ยินดีต้อนรับ Agent! คู่มือนี้จะช่วยนำทางคุณผ่านด่าน CTF ของ MUT Secure Vault
 
@@ -31,43 +31,27 @@ curl -X POST http://localhost:3001/api/game/start \
 
 ## ด่าน 1: Cryptography
 
-### วิธีที่ 1: โหมดง่าย (แนะนำ)
-ใช้ endpoint `/api/c1/easy-decrypt` ที่จะทำ DH exchange และถอดรหัสให้อัตโนมัติ
+### ภาพรวม
+ด่านนี้จะทดสอบความรู้เรื่อง:
+- Diffie-Hellman Key Exchange
+- Caesar Cipher
+- AES-256-CBC Encryption
+- SHA-256 Hashing
 
-```bash
-# ใช้ token จาก /api/game/start
-curl http://localhost:3001/api/c1/easy-decrypt \
-  -H "Authorization: Bearer $SESSION_TOKEN"
-```
+### ขั้นตอนการทำ
 
-Response จะให้:
-- `decryptedMessage`: ข้อความที่ถอดรหัสแล้ว
-- `signature`: ลายเซ็นดิจิทัล
-- `example`: โค้ด Python สำหรับคำนวณ flag
-
-### สร้าง FLAG_1
-```python
-import hashlib
-
-message = "ข้อความจาก decryptedMessage"
-signature = "signature จาก response"
-
-data = message + "1990" + signature
-hash_result = hashlib.sha256(data.encode()).hexdigest()[:32]
-FLAG_1 = f"MUT{{{hash_result}}}"
-print(FLAG_1)
-```
-
----
-
-### วิธีที่ 2: โหมดยาก (ทำเองทั้งหมด)
-
-#### ขั้นตอนที่ 1: ดาวน์โหลด Artifacts
+#### 1. ดาวน์โหลด Artifacts
 ```bash
 curl http://localhost:3001/api/c1/artifacts -H "Authorization: Bearer $TOKEN"
 ```
 
-#### ขั้นตอนที่ 2: Diffie-Hellman Key Exchange
+จะได้ข้อมูล:
+- Diffie-Hellman parameters (prime, generator)
+- AES IV
+- RSA public key
+- Salt cipher (รหัสลับที่ต้องถอด)
+
+#### 2. Diffie-Hellman Key Exchange
 ```python
 import random
 
@@ -88,14 +72,38 @@ A = pow(g, a, p)
 shared_secret = pow(B, a, p)
 ```
 
-#### ขั้นตอนที่ 3: สร้าง AES Key
+#### 3. ถอดรหัส Caesar Cipher เพื่อหา Salt
+- ดู salt cipher จาก artifacts (เช่น "jlirerivv")
+- ใช้ Caesar cipher decoder
+- ลองหา shift ที่ถูกต้อง (คำตอบควรเป็นคำที่มีความหมาย)
+
+```python
+def caesar_decrypt(text, shift):
+    result = ""
+    for char in text:
+        if char.isalpha():
+            base = ord('A') if char.isupper() else ord('a')
+            result += chr((ord(char) - base - shift) % 26 + base)
+        else:
+            result += char
+    return result
+
+# ลอง shift ต่างๆ จนได้คำที่มีความหมาย
+cipher_text = "jlirerivv"
+for shift in range(26):
+    print(f"Shift {shift}: {caesar_decrypt(cipher_text, shift)}")
+```
+
+#### 4. สร้าง AES Key
 ```python
 import hashlib
-key_data = hex(shared_secret)[2:] + "SUT1990"
+
+# ใช้ salt ที่ได้จากการถอด Caesar cipher
+key_data = hex(shared_secret)[2:] + salt
 aes_key = hashlib.sha256(key_data.encode()).digest()
 ```
 
-#### ขั้นตอนที่ 4: ถอดรหัส AES-256-CBC
+#### 5. ถอดรหัส AES-256-CBC
 ```python
 from Crypto.Cipher import AES
 
@@ -108,23 +116,27 @@ decrypted = cipher.decrypt(encrypted_data)
 message = decrypted[:-decrypted[-1]].decode()  # ลบ PKCS7 padding
 ```
 
-#### ขั้นตอนที่ 5: ตรวจสอบลายเซ็น RSA (ไม่บังคับ)
-```python
-from Crypto.PublicKey import RSA
-from Crypto.Signature import pkcs1_15
-from Crypto.Hash import SHA256
+**คำใบ้:** ถ้าข้อความที่ถอดรหัสอ่านได้ (ไม่ใช่ตัวอักษรมั่ว) แสดงว่า salt ถูกต้อง
 
-# GET /api/c1/signature
-public_key = RSA.import_key(artifacts['rsa']['publicKey'])
-h = SHA256.new(message.encode())
-pkcs1_15.new(public_key).verify(h, signature_bytes)
+#### 6. ดึง Signature
+```bash
+curl http://localhost:3001/api/c1/signature -H "Authorization: Bearer $TOKEN"
 ```
 
-#### ขั้นตอนที่ 6: สร้าง FLAG_1
+#### 7. สร้าง FLAG_1
+
+**สูตร:** `FLAG_1 = MUT{SHA256(decrypted_message + "????????" + signature)[:32]}`
+
 ```python
-flag_data = message + "1990" + signature_hex
-FLAG_1 = f"MUT{{{hashlib.sha256(flag_data.encode()).hexdigest()[:32]}}}"
+import hashlib
+
+# ???????? = ค่าลับที่ต้องหา (เกี่ยวกับวันสำคัญของ มทส.)
+flag_data = message + "????????" + signature_hex
+flag_hash = hashlib.sha256(flag_data.encode()).hexdigest()[:32]
+FLAG_1 = f"MUT{{{flag_hash}}}"
 ```
+
+**คำใบ้:** ค่า "????????" เกี่ยวข้องกับวันก่อตั้ง มทส. ในรูปแบบ วันเดือนปี พ.ศ.
 
 ---
 
@@ -187,6 +199,10 @@ curl -X POST http://localhost:3001/api/c2/submit-flag \
   -d '{"flag": "MUT{...}"}'
 ```
 
+### คำใบ้เพิ่มเติม
+- **รหัสผ่าน:** ตัวอักษรถูกสลับที่ ลองจัดเรียงใหม่ให้เป็นคำที่มีความหมาย (เกี่ยวกับสาขาวิชา)
+- **PIN:** มทส. อยู่ที่จังหวัดนครราชสีมา รหัสไปรษณีย์คืออะไร?
+
 ---
 
 ## ด่าน 3: Authorization (2 ช่องโหว่)
@@ -229,19 +245,21 @@ curl -X POST http://localhost:3001/api/c3/submit-flag \
 
 ## สรุปข้อมูลสำคัญ
 
-| ข้อมูล | ค่า |
+| ข้อมูล | คำใบ้ |
 |--------|-----|
-| ปีก่อตั้ง มทส. | 1990 |
+| วันก่อตั้ง มทส. | 27 กรกฎาคม 2533 |
 | รหัสไปรษณีย์นครราชสีมา | 30000 |
 | รหัสผ่าน | ดูคำใบ้ในอีเมล (ตัวอักษรสลับ) |
 | PIN | ดูซองจดหมายในอีเมล |
+| Salt | ถอดรหัส Caesar cipher |
 
 ---
 
 ## เคล็ดลับ
 
-1. **ใช้โหมดง่าย** - ด่าน 1 มี `/api/c1/easy-decrypt` ที่ทำให้อัตโนมัติ
-2. **อ่านคำใบ้ใน API** - ทุก endpoint มีคำใบ้ชัดเจน
-3. **ใช้ curl หรือ Postman** - ง่ายกว่าเขียนโค้ดเอง
+1. **อ่านคำใบ้ใน API** - ทุก endpoint มีคำใบ้ชัดเจน
+2. **ใช้ curl หรือ Postman** - ง่ายกว่าเขียนโค้ดเอง
+3. **ถ้า AES decrypt ออกมาเป็นตัวอักษรมั่ว** - แสดงว่า salt ผิด ลองใหม่
+4. **สังเกตข้อมูลในอีเมล** - มีคำใบ้สำหรับ password และ PIN
 
 ขอให้โชคดี!

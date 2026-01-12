@@ -55,7 +55,7 @@ Content-Type: application/json
 
 ### เริ่มเกม Session
 ```http
-POST /api/auth/session/start
+POST /api/game/start
 Authorization: Bearer <login_token>
 ```
 
@@ -120,6 +120,14 @@ Authorization: Bearer <session_token>
     },
     "aes": {
       "iv": "hex_string"
+    },
+    "saltCipher": {
+      "cipherText": "jlirerivv",
+      "hint": "Caesar cipher - find the right shift to decode"
+    },
+    "metadata": {
+      "sutFoundingDate": "27 July 1990",
+      "buddhistEra": "27 กรกฎาคม 2533"
     }
   }
 }
@@ -174,8 +182,9 @@ Authorization: Bearer <session_token>
   "success": true,
   "signature": {
     "algorithm": "RSA-SHA256",
-    "data": "base64_signature"
-  }
+    "data": "hex_signature"
+  },
+  "flagFormula": "FLAG_1 = MUT{SHA256(decrypted_message + \"????????\" + signature)[:32]}"
 }
 ```
 
@@ -204,11 +213,42 @@ Authorization: Bearer <session_token>
 ```json
 {
   "factors": {
+    "email": { "verified": false },
     "password": { "verified": false, "hint": {...} },
-    "pin": { "verified": false, "attempts": 0, "maxAttempts": 3 },
-    "otp": { "verified": false }
+    "pin": { "verified": false, "attempts": 0, "maxAttempts": 3 }
   },
   "mfaComplete": false
+}
+```
+
+### ส่ง Email OTP
+```http
+POST /api/c2/email/send-otp
+Authorization: Bearer <session_token>
+Content-Type: application/json
+
+{
+  "email": "your@email.com"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "OTP sent to email",
+  "demoOTP": "123456"
+}
+```
+
+### ยืนยัน Email OTP
+```http
+POST /api/c2/email/verify-otp
+Authorization: Bearer <session_token>
+Content-Type: application/json
+
+{
+  "otp": "123456"
 }
 ```
 
@@ -219,7 +259,7 @@ Authorization: Bearer <session_token>
 Content-Type: application/json
 
 {
-  "password": "Suranaree1990!"
+  "password": "your_unscrambled_password"
 }
 ```
 
@@ -234,39 +274,19 @@ Content-Type: application/json
 }
 ```
 
-### ตั้งค่า OTP
-```http
-GET /api/c2/otp/setup
-Authorization: Bearer <session_token>
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "qrCode": "data:image/png;base64,...",
-  "secret": "BASE32_SECRET",
-  "algorithm": "TOTP",
-  "digits": 6,
-  "period": 30
-}
-```
-
-### ยืนยัน OTP
-```http
-POST /api/c2/otp/verify
-Authorization: Bearer <session_token>
-Content-Type: application/json
-
-{
-  "otp": "123456"
-}
-```
-
 ### รับสถานะ MFA / FLAG_2
 ```http
 GET /api/c2/mfa/status
 Authorization: Bearer <session_token>
+```
+
+**Response (when complete):**
+```json
+{
+  "success": true,
+  "mfaComplete": true,
+  "flag2": "MUT{...}"
+}
 ```
 
 ### ส่ง FLAG_2
