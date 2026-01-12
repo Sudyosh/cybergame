@@ -44,7 +44,7 @@ class CryptoService {
 
   generateAESKey(sharedSecret) {
     // Derive AES key from shared secret + SUT salt
-    const salt = this.config.salt; // "SUT1990"
+    const salt = this.config.salt; // "suranaree"
     const hash = crypto.createHash(this.config.hash.algorithm);
     hash.update(sharedSecret + salt);
     return hash.digest().slice(0, this.config.aes.keyLength);

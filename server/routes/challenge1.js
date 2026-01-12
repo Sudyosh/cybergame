@@ -41,6 +41,27 @@ router.get('/story', (req, res) => {
   });
 });
 
+// Hidden clues configuration for puzzle
+const HIDDEN_CLUES = {
+  // Full keyword: SURANAREE1990 (split into 5 parts)
+  fragment1: 'U1VS',           // Base64 of "SUR"
+  fragment2: 'QU5B',           // Base64 of "ANA" - in HTTP header
+  fragment3: '524545',         // Hex of "REE" - in HTML comment hint
+  fragment4: '19',             // Plain - hidden in console hint
+  fragment5: 'OTA=',           // Base64 of "90" - in artifacts
+  keyword: 'SURANAREE1990'
+};
+
+// Caesar Cipher puzzle for AES Salt
+const SALT_CIPHER = {
+  // Original: suranaree
+  // Caesar shift +17: s→j, u→l, r→i, a→r, n→e, a→r, r→i, e→v, e→v
+  cipherText: 'jlirerivv',
+  shift: 17,
+  plainText: 'suranaree',
+  hint: 'Caesar cipher - find the right shift to decode'
+};
+
 // GET /api/c1/artifacts - Download crypto artifacts
 router.get('/artifacts', (req, res) => {
   try {
@@ -84,12 +105,22 @@ router.get('/artifacts', (req, res) => {
       VALUES (?, ?, 'C1_ARTIFACTS_DOWNLOAD', ?, datetime('now'))
     `).run(sessionId, req.user.playerId, JSON.stringify({ downloaded: true }));
 
-    // Return artifacts (public data only)
+    // Set hidden clue in HTTP header (Fragment 2)
+    res.setHeader('X-Vault-Fragment', HIDDEN_CLUES.fragment2);
+    res.setHeader('X-Vault-Hint', 'Decode me (Base64) for fragment 2 of 5');
+
+    // Return artifacts (public data only) with hidden clues
     res.json({
       success: true,
       message: {
         en: 'Cryptographic artifacts downloaded. Begin your decryption journey.',
         th: 'ดาวน์โหลดสิ่งประดิษฐ์การเข้ารหัสแล้ว เริ่มการถอดรหัสของคุณ'
+      },
+      // Hidden puzzle data
+      _vault_data: {
+        fragment1: HIDDEN_CLUES.fragment1,  // Base64 encoded
+        encoding: 'base64',
+        hint: 'This is fragment 1 of 5. Decode it.'
       },
       artifacts: {
         diffieHellman: {
@@ -98,6 +129,14 @@ router.get('/artifacts', (req, res) => {
           hint: {
             en: 'The year 1990 marks the beginning of SUT. This number is significant...',
             th: 'ปี 1990 คือจุดเริ่มต้นของ มทส. ตัวเลขนี้มีความสำคัญ...'
+          },
+          // Hidden clue fragment 5
+          _metadata: {
+            created: '1990-07-27',
+            created_be: '27-07-2533',
+            note_flag: 'The founding date in Buddhist Era format (DDMMYYYY) might be useful...',
+            fragment5: HIDDEN_CLUES.fragment5,
+            note: 'Base64 encoded fragment 5 of 5'
           }
         },
         rsa: {
@@ -105,14 +144,31 @@ router.get('/artifacts', (req, res) => {
           hint: {
             en: 'This key will verify the signature of the decrypted message.',
             th: 'คีย์นี้จะใช้ตรวจสอบลายเซ็นของข้อความที่ถอดรหัสแล้ว'
+          },
+          // Hidden clue hint for fragment 3
+          _debug: {
+            hex_fragment3: HIDDEN_CLUES.fragment3,
+            note: 'Hex encoded fragment 3 of 5'
           }
         },
         aes: {
           iv: artifacts.aes_iv,
           hint: {
-            en: 'AES-256-CBC encryption. The key comes from SHA256(shared_secret + salt). Salt = "SUT1990"',
-            th: 'การเข้ารหัส AES-256-CBC คีย์มาจาก SHA256(shared_secret + salt) Salt = "SUT1990"'
-          }
+            en: 'AES-256-CBC encryption. The key comes from SHA256(shared_secret + salt). But what is the salt?',
+            th: 'การเข้ารหัส AES-256-CBC คีย์มาจาก SHA256(shared_secret + salt) แต่ salt คืออะไร?'
+          },
+          // Caesar Cipher puzzle for salt
+          _cipher_puzzle: {
+            cipherText: SALT_CIPHER.cipherText,
+            algorithm: 'Caesar Cipher',
+            hint: {
+              en: 'The salt is encrypted with Caesar cipher. Find the right shift to decode it.',
+              th: 'salt ถูกเข้ารหัสด้วย Caesar cipher หาค่า shift ที่ถูกต้องเพื่อถอดรหัส'
+            },
+            shift: SALT_CIPHER.shift
+          },
+          // Hidden clue hint for fragment 4
+          _console_hint: 'Check browser console for fragment 4. Hint: the founding year has two parts...'
         }
       },
       instructions: {
@@ -125,7 +181,7 @@ Step 1: Perform Diffie-Hellman key exchange
   - Compute shared secret: S = B^a mod p
 
 Step 2: Derive AES key
-  - Compute: key = SHA256(shared_secret + "SUT1990")
+  - Compute: key = SHA256(shared_secret + "suranaree")
   - Use first 32 bytes as AES-256 key
 
 Step 3: Decrypt the message
@@ -137,7 +193,7 @@ Step 4: Verify signature
   - GET /api/c1/signature
 
 Step 5: Generate FLAG_1
-  - FLAG_1 = MUT{SHA256(message + "1990" + signature_hex)[:32]}
+  - FLAG_1 = MUT{SHA256(message + "????????" + signature_hex)[:32]}
 `,
         th: `
 ขั้นตอนที่ 1: ทำ Diffie-Hellman key exchange
@@ -148,7 +204,7 @@ Step 5: Generate FLAG_1
   - คำนวณ shared secret: S = B^a mod p
 
 ขั้นตอนที่ 2: สร้าง AES key
-  - คำนวณ: key = SHA256(shared_secret + "SUT1990")
+  - คำนวณ: key = SHA256(shared_secret + "suranaree")
   - ใช้ 32 bytes แรกเป็น AES-256 key
 
 ขั้นตอนที่ 3: ถอดรหัสข้อความ
@@ -160,7 +216,7 @@ Step 5: Generate FLAG_1
   - GET /api/c1/signature
 
 ขั้นตอนที่ 5: สร้าง FLAG_1
-  - FLAG_1 = MUT{SHA256(message + "1990" + signature_hex)[:32]}
+  - FLAG_1 = MUT{SHA256(message + "????????" + signature_hex)[:32]}
 `
       }
     });
@@ -169,6 +225,196 @@ Step 5: Generate FLAG_1
     console.error('[C1] Artifacts error:', error);
     res.status(500).json({ error: 'Internal Server Error', message: 'Failed to generate artifacts' });
   }
+});
+
+// POST /api/c1/verify-keyword - Verify the puzzle keyword to unlock crypto calculator
+router.post('/verify-keyword', (req, res) => {
+  try {
+    const { keyword } = req.body;
+    const sessionId = req.sessionId;
+    const db = getDatabase();
+
+    if (!keyword) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Keyword required'
+      });
+    }
+
+    // Check if keyword is correct (case-insensitive)
+    const isCorrect = keyword.toUpperCase() === HIDDEN_CLUES.keyword;
+
+    // Log attempt
+    db.prepare(`
+      INSERT INTO audit_log (session_id, player_id, action, details, timestamp)
+      VALUES (?, ?, 'C1_KEYWORD_ATTEMPT', ?, datetime('now'))
+    `).run(sessionId, req.user.playerId, JSON.stringify({
+      keyword: keyword.substring(0, 20),
+      correct: isCorrect
+    }));
+
+    if (isCorrect) {
+      res.json({
+        success: true,
+        unlocked: true,
+        message: {
+          en: 'Correct! The vault keyword has been accepted. Crypto Calculator is now unlocked.',
+          th: 'ถูกต้อง! รหัสห้องนิรภัยได้รับการยอมรับ Crypto Calculator ถูกปลดล็อกแล้ว'
+        }
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        unlocked: false,
+        message: {
+          en: 'Incorrect keyword. Keep searching for the hidden fragments.',
+          th: 'รหัสไม่ถูกต้อง ค้นหา fragments ที่ซ่อนอยู่ต่อไป'
+        },
+        hint: {
+          en: 'There are 5 fragments hidden in various places: API response, HTTP headers, and encoded data.',
+          th: 'มี 5 fragments ซ่อนอยู่ในที่ต่างๆ: API response, HTTP headers, และ encoded data'
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error('[C1] Verify keyword error:', error);
+    res.status(500).json({ error: 'Internal Server Error', message: 'Failed to verify keyword' });
+  }
+});
+
+// GET /api/c1/puzzle-hint - Get hints for finding fragments
+router.get('/puzzle-hint', (req, res) => {
+  res.json({
+    title: {
+      en: 'The Vault Keyword Puzzle',
+      th: 'ปริศนารหัสห้องนิรภัย'
+    },
+    description: {
+      en: 'Before accessing the Crypto Calculator, you must find the hidden keyword. 5 fragments are scattered across the vault.',
+      th: 'ก่อนเข้าถึง Crypto Calculator คุณต้องค้นหารหัสลับที่ซ่อนไว้ 5 fragments กระจายอยู่ทั่วห้องนิรภัย'
+    },
+    fragments: [
+      {
+        id: 1,
+        location: { en: 'Look in the API response data', th: 'ดูใน API response data' },
+        encoding: 'Base64',
+        hint: { en: '_vault_data contains the first piece', th: '_vault_data มีชิ้นส่วนแรก' }
+      },
+      {
+        id: 2,
+        location: { en: 'Check the HTTP response headers', th: 'ตรวจสอบ HTTP response headers' },
+        encoding: 'Base64',
+        hint: { en: 'X-Vault-Fragment header holds a secret', th: 'X-Vault-Fragment header เก็บความลับ' }
+      },
+      {
+        id: 3,
+        location: { en: 'Hidden in RSA artifact data', th: 'ซ่อนอยู่ใน RSA artifact data' },
+        encoding: 'Hex',
+        hint: { en: '_debug field has what you need', th: '_debug field มีสิ่งที่คุณต้องการ' }
+      },
+      {
+        id: 4,
+        location: { en: 'The founding year, first half', th: 'ปีก่อตั้ง ครึ่งแรก' },
+        encoding: 'Plain',
+        hint: { en: '19XX - what comes before XX?', th: '19XX - อะไรมาก่อน XX?' }
+      },
+      {
+        id: 5,
+        location: { en: 'DH metadata contains the last piece', th: 'DH metadata มีชิ้นสุดท้าย' },
+        encoding: 'Base64',
+        hint: { en: '_metadata.fragment5 completes the puzzle', th: '_metadata.fragment5 ทำให้ปริศนาสมบูรณ์' }
+      }
+    ],
+    finalHint: {
+      en: 'Decode all fragments and combine them in order (1-2-3-4-5) to form the keyword.',
+      th: 'ถอดรหัส fragments ทั้งหมดและรวมกันตามลำดับ (1-2-3-4-5) เพื่อสร้างรหัส'
+    }
+  });
+});
+
+// POST /api/c1/verify-salt - Verify the Caesar cipher solution for AES salt
+router.post('/verify-salt', (req, res) => {
+  try {
+    const { salt } = req.body;
+    const sessionId = req.sessionId;
+    const db = getDatabase();
+
+    if (!salt) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Salt required'
+      });
+    }
+
+    // Check if salt is correct (case-insensitive)
+    const isCorrect = salt.toLowerCase() === SALT_CIPHER.plainText.toLowerCase();
+
+    // Log attempt
+    db.prepare(`
+      INSERT INTO audit_log (session_id, player_id, action, details, timestamp)
+      VALUES (?, ?, 'C1_SALT_ATTEMPT', ?, datetime('now'))
+    `).run(sessionId, req.user.playerId, JSON.stringify({
+      salt: salt.substring(0, 10),
+      correct: isCorrect
+    }));
+
+    if (isCorrect) {
+      res.json({
+        success: true,
+        correct: true,
+        message: {
+          en: 'Correct! You have decoded the Caesar cipher. The salt is "suranaree" (the university name).',
+          th: 'ถูกต้อง! คุณถอดรหัส Caesar cipher สำเร็จ salt คือ "suranaree" (ชื่อมหาวิทยาลัย)'
+        }
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        correct: false,
+        message: {
+          en: 'Incorrect salt. Remember: Caesar cipher shifts each character.',
+          th: 'salt ไม่ถูกต้อง จำไว้: Caesar cipher เลื่อนตัวอักษรแต่ละตัว'
+        },
+        hint: {
+          en: 'Cipher text is "jlirerivv". Try different shift values - the result should be a word.',
+          th: 'cipher text คือ "jlirerivv" ลอง shift ค่าต่างๆ - ผลลัพธ์ควรเป็นคำที่มีความหมาย'
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error('[C1] Verify salt error:', error);
+    res.status(500).json({ error: 'Internal Server Error', message: 'Failed to verify salt' });
+  }
+});
+
+// GET /api/c1/salt-hint - Get hint for Caesar cipher puzzle
+router.get('/salt-hint', (req, res) => {
+  res.json({
+    title: {
+      en: 'The Caesar Cipher Puzzle',
+      th: 'ปริศนา Caesar Cipher'
+    },
+    description: {
+      en: 'To derive the AES key, you need the secret salt. It has been encrypted using Caesar cipher.',
+      th: 'เพื่อสร้าง AES key คุณต้องหา salt ลับ มันถูกเข้ารหัสด้วย Caesar cipher'
+    },
+    cipher: {
+      text: SALT_CIPHER.cipherText,
+      algorithm: 'Caesar Cipher',
+      shift: SALT_CIPHER.shift,
+      direction: 'backward'
+    },
+    example: {
+      en: 'Caesar cipher shifts each letter. With shift=1 backward: B→A, C→B, 1→0, etc.',
+      th: 'Caesar cipher เลื่อนตัวอักษรแต่ละตัว ด้วย shift=1 ย้อนกลับ: B→A, C→B, 1→0 เป็นต้น'
+    },
+    solution_format: {
+      en: 'The salt should be 9 letters (a word)',
+      th: 'salt ควรมี 9 ตัวอักษร (คำภาษาอังกฤษ)'
+    }
+  });
 });
 
 // POST /api/c1/dh/exchange - Perform DH key exchange
@@ -239,8 +485,8 @@ router.post('/dh/exchange', (req, res) => {
       },
       serverPublicKey: artifacts.dh_server_public,
       hint: {
-        en: 'Shared secret computed. Now: AES_KEY = SHA256(shared_secret + "SUT1990")[:32]',
-        th: 'คำนวณ shared secret แล้ว ต่อไป: AES_KEY = SHA256(shared_secret + "SUT1990")[:32]'
+        en: 'Shared secret computed. Now: AES_KEY = SHA256(shared_secret + "suranaree")[:32]',
+        th: 'คำนวณ shared secret แล้ว ต่อไป: AES_KEY = SHA256(shared_secret + "suranaree")[:32]'
       }
     });
 
@@ -271,8 +517,8 @@ router.get('/encrypted', (req, res) => {
         data: artifacts.aes_encrypted_data
       },
       hint: {
-        en: 'Decrypt using: AES_KEY = SHA256(shared_secret + "SUT1990")[:32]',
-        th: 'ถอดรหัสด้วย: AES_KEY = SHA256(shared_secret + "SUT1990")[:32]'
+        en: 'Decrypt using: AES_KEY = SHA256(shared_secret + "suranaree")[:32]',
+        th: 'ถอดรหัสด้วย: AES_KEY = SHA256(shared_secret + "suranaree")[:32]'
       }
     });
 
@@ -389,16 +635,16 @@ router.get('/easy-decrypt', async (req, res) => {
       decryptedMessage: artifacts.secret_message,
       signature: signature,
       hints: {
-        formula: 'FLAG_1 = MUT{SHA256(message + "1990" + signature)[:32]}',
+        formula: 'FLAG_1 = MUT{SHA256(message + "????????" + signature)[:32]}',
         steps: {
           en: [
-            '1. Concatenate: message + "1990" + signature',
+            '1. Concatenate: message + "????????" + signature',
             '2. Hash it with SHA256',
             '3. Take first 32 characters of the hex result',
             '4. Wrap with MUT{...}'
           ],
           th: [
-            '1. ต่อกัน: message + "1990" + signature',
+            '1. ต่อกัน: message + "????????" + signature',
             '2. Hash ด้วย SHA256',
             '3. ตัดเอา 32 ตัวอักษรแรกของผลลัพธ์ hex',
             '4. ครอบด้วย MUT{...}'
@@ -463,7 +709,7 @@ router.post('/submit-flag', flagLimiter, (req, res) => {
       });
     }
 
-    // Generate expected flag using: SHA256(message + "1990" + signature)
+    // Generate expected flag using: SHA256(message + "27072533" + signature)
     const expectedFlag = flagService.generateFlag1(
       sessionId,
       artifacts.secret_message,
@@ -524,8 +770,8 @@ router.post('/submit-flag', flagLimiter, (req, res) => {
         th: 'Flag ไม่ถูกต้อง ตรวจสอบการคำนวณของคุณ'
       },
       hint: {
-        en: 'FLAG_1 = MUT{SHA256(decrypted_message + "1990" + signature_hex)[:32]}',
-        th: 'FLAG_1 = MUT{SHA256(decrypted_message + "1990" + signature_hex)[:32]}'
+        en: 'FLAG_1 = MUT{SHA256(decrypted_message + "????????" + signature_hex)[:32]}',
+        th: 'FLAG_1 = MUT{SHA256(decrypted_message + "????????" + signature_hex)[:32]}'
       }
     });
 

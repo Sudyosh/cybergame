@@ -8,7 +8,7 @@
 
 | ด่าน | รายละเอียด |
 |------|------------|
-| **ด่าน 1** | มี `/easy-decrypt` ที่ทำ DH + ถอดรหัสให้อัตโนมัติ แต่ต้องคำนวณ flag เอง |
+| **ด่าน 1** | Diffie-Hellman + Caesar Cipher (shift 17) + AES Decrypt + FLAG คำนวณเอง |
 | **ด่าน 2** | 3 ปัจจัย (Email OTP, Password, PIN) พร้อมคำใบ้และช่องกรอก flag |
 | **ด่าน 3** | 2 ช่องโหว่ (delegation, declassify) พร้อมคำแนะนำทีละขั้นตอน |
 
@@ -38,52 +38,7 @@ curl -X POST http://localhost:3001/api/game/start \
 
 ## ด่าน 1: Cryptography - เฉลย
 
-### โหมดง่าย (แนะนำสำหรับผู้เริ่มต้น)
-```bash
-# เรียก easy-decrypt (ทำ DH และถอดรหัสให้อัตโนมัติ)
-curl http://localhost:3001/api/c1/easy-decrypt \
-  -H "Authorization: Bearer $SESSION_TOKEN"
-```
-
-Response:
-```json
-{
-  "success": true,
-  "decryptedMessage": "THE LEGACY OF SURANAREE LIVES ON...",
-  "signature": "abc123...",
-  "flagFormula": "FLAG_1 = MUT{SHA256(message + \"1990\" + signature)[:32]}",
-  "example": { "python": "..." }
-}
-```
-
-### คำนวณ FLAG_1
-```python
-import hashlib
-
-message = "THE LEGACY OF SURANAREE LIVES ON..."  # จาก decryptedMessage
-signature = "abc123..."  # จาก signature
-
-data = message + "1990" + signature
-hash_result = hashlib.sha256(data.encode()).hexdigest()[:32]
-FLAG_1 = f"MUT{{{hash_result}}}"
-print(FLAG_1)
-```
-
-### ส่ง FLAG_1
-```bash
-curl -X POST http://localhost:3001/api/c1/submit-flag \
-  -H "Authorization: Bearer $SESSION_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"flag": "MUT{calculated_hash_here}"}'
-```
-
-**หมายเหตุ**: โหมดง่ายไม่ให้ FLAG มาเลย ต้องคำนวณเองตามสูตร
-
----
-
-### โหมดยาก (ทำเองทั้งหมด)
-
-#### ขั้นตอนที่ 1: ดาวน์โหลด Artifacts
+### ขั้นตอนที่ 1: ดาวน์โหลด Artifacts
 ```bash
 curl http://localhost:3001/api/c1/artifacts \
   -H "Authorization: Bearer $TOKEN"
@@ -94,8 +49,9 @@ Response จะได้:
 - `generator` (g): ค่า generator สำหรับ DH
 - `iv`: Initialization Vector สำหรับ AES
 - `publicKey`: RSA public key สำหรับตรวจสอบลายเซ็น
+- `saltCipher`: Caesar cipher (jlirerivv)
 
-#### ขั้นตอนที่ 2: Diffie-Hellman Key Exchange
+### ขั้นตอนที่ 2: Diffie-Hellman Key Exchange
 
 ```python
 import requests
@@ -126,21 +82,43 @@ shared_secret = pow(B, a, p)
 print(f"Shared Secret: {hex(shared_secret)}")
 ```
 
-#### ขั้นตอนที่ 3: สร้าง AES Key จาก Shared Secret
+### ขั้นตอนที่ 3: ถอดรหัส Caesar Cipher เพื่อหา Salt
+
+**คำตอบ:**
+- Cipher text: `jlirerivv`
+- Shift: **17** (เลื่อนกลับ 17 ตำแหน่ง)
+- Plain text: `suranaree`
+
+```python
+def caesar_decrypt(text, shift):
+    result = ""
+    for char in text:
+        if char.isalpha():
+            base = ord('A') if char.isupper() else ord('a')
+            result += chr((ord(char) - base - shift) % 26 + base)
+        else:
+            result += char
+    return result
+
+cipher_text = "jlirerivv"
+salt = caesar_decrypt(cipher_text, 17)  # = "suranaree"
+```
+
+### ขั้นตอนที่ 4: สร้าง AES Key จาก Shared Secret + Salt
 
 ```python
 import hashlib
 
-# Salt = "SUT1990"
-salt = "SUT1990"
+# Salt = "suranaree" (จาก Caesar cipher shift 17)
+salt = "suranaree"
 key_data = hex(shared_secret)[2:] + salt
 
-# AES Key = SHA256(shared_secret_hex + "SUT1990")[:32 bytes]
+# AES Key = SHA256(shared_secret_hex + "suranaree")[:32 bytes]
 aes_key = hashlib.sha256(key_data.encode()).digest()
 print(f"AES Key: {aes_key.hex()}")
 ```
 
-#### ขั้นตอนที่ 4: ถอดรหัส AES-256-CBC
+### ขั้นตอนที่ 5: ถอดรหัส AES-256-CBC
 
 ```python
 from Crypto.Cipher import AES
@@ -164,45 +142,48 @@ message = decrypted[:-padding_len].decode('utf-8')
 print(f"Decrypted Message: {message}")
 ```
 
-#### ขั้นตอนที่ 5: ตรวจสอบลายเซ็น RSA (ไม่บังคับ)
+**ข้อความที่ถอดรหัสได้:** `THE LEGACY OF SURANAREE LIVES ON...`
+
+### ขั้นตอนที่ 6: ดึง Signature
 
 ```python
-from Crypto.PublicKey import RSA
-from Crypto.Signature import pkcs1_15
-from Crypto.Hash import SHA256
-
 # รับลายเซ็น
 sig_response = requests.get(
     'http://localhost:3001/api/c1/signature',
     headers={'Authorization': f'Bearer {TOKEN}'}
 ).json()
 
-signature = bytes.fromhex(sig_response['signature']['data'])
-public_key = RSA.import_key(artifacts['rsa']['publicKey'])
-
-# ตรวจสอบลายเซ็น
-h = SHA256.new(message.encode())
-try:
-    pkcs1_15.new(public_key).verify(h, signature)
-    print("Signature is VALID!")
-except:
-    print("Signature is INVALID!")
+signature = sig_response['signature']['data']
 ```
 
-#### ขั้นตอนที่ 6: สร้าง FLAG_1
+> **Hint:** "Happy Birthday SUT" - วันเกิด มทส. คืออะไร?
+
+### ขั้นตอนที่ 7: สร้าง FLAG_1
+
+**สูตร:** `FLAG_1 = MUT{SHA256(message + "27072533" + signature)[:32]}`
+
+> **หมายเหตุ:** 27072533 = วันที่ 27 กรกฎาคม 2533 (วันก่อตั้ง มทส. ในปี พ.ศ.)
 
 ```python
 import hashlib
 
-# FLAG_1 = MUT{SHA256(message + "1990" + signature_hex)[:32]}
+# FLAG_1 = MUT{SHA256(message + "27072533" + signature_hex)[:32]}
 signature_hex = sig_response['signature']['data']
-flag_data = message + "1990" + signature_hex
+flag_data = message + "27072533" + signature_hex
 flag_hash = hashlib.sha256(flag_data.encode()).hexdigest()[:32]
 FLAG_1 = f"MUT{{{flag_hash}}}"
 print(f"FLAG_1: {FLAG_1}")
 ```
 
-#### โค้ดเต็ม (Python)
+### ส่ง FLAG_1
+```bash
+curl -X POST http://localhost:3001/api/c1/submit-flag \
+  -H "Authorization: Bearer $SESSION_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"flag": "MUT{calculated_hash_here}"}'
+```
+
+### โค้ดเต็ม (Python)
 
 ```python
 import requests
@@ -213,6 +194,16 @@ from Crypto.Cipher import AES
 BASE_URL = "http://localhost:3001/api"
 TOKEN = "your_session_token"
 headers = {"Authorization": f"Bearer {TOKEN}"}
+
+def caesar_decrypt(text, shift):
+    result = ""
+    for char in text:
+        if char.isalpha():
+            base = ord('A') if char.isupper() else ord('a')
+            result += chr((ord(char) - base - shift) % 26 + base)
+        else:
+            result += char
+    return result
 
 # Step 1: Get artifacts
 artifacts = requests.get(f"{BASE_URL}/c1/artifacts", headers=headers).json()['artifacts']
@@ -233,28 +224,32 @@ exchange = requests.post(
 B = int(exchange['serverPublicKey'], 16)
 shared_secret = pow(B, a, p)
 
-# Step 3: Derive AES key
-key_data = hex(shared_secret)[2:] + "SUT1990"
+# Step 3: Solve Caesar cipher (shift 17)
+cipher_text = "jlirerivv"
+salt = caesar_decrypt(cipher_text, 17)  # = "suranaree"
+
+# Step 4: Derive AES key
+key_data = hex(shared_secret)[2:] + salt
 aes_key = hashlib.sha256(key_data.encode()).digest()
 
-# Step 4: Decrypt message
+# Step 5: Decrypt message
 encrypted = requests.get(f"{BASE_URL}/c1/encrypted", headers=headers).json()
 cipher = AES.new(aes_key, AES.MODE_CBC, iv)
 decrypted = cipher.decrypt(bytes.fromhex(encrypted['encrypted']['data']))
 message = decrypted[:-decrypted[-1]].decode()
 print(f"Message: {message}")
 
-# Step 5: Get signature
+# Step 6: Get signature
 sig_resp = requests.get(f"{BASE_URL}/c1/signature", headers=headers).json()
 signature = sig_resp['signature']['data']
 
-# Step 6: Generate FLAG_1
-flag_data = message + "1990" + signature
+# Step 7: Generate FLAG_1
+flag_data = message + "27072533" + signature
 flag_hash = hashlib.sha256(flag_data.encode()).hexdigest()[:32]
 FLAG_1 = f"MUT{{{flag_hash}}}"
 print(f"FLAG_1: {FLAG_1}")
 
-# Step 7: Submit
+# Step 8: Submit
 result = requests.post(
     f"{BASE_URL}/c1/submit-flag",
     headers=headers,
@@ -265,6 +260,7 @@ print(result)
 
 ### ความรู้ที่ได้จากด่านนี้
 - **Diffie-Hellman**: การแลกเปลี่ยนคีย์อย่างปลอดภัยผ่านช่องทางที่ไม่ปลอดภัย
+- **Caesar Cipher**: การเข้ารหัสแบบดั้งเดิมด้วยการเลื่อนตัวอักษร
 - **AES-256-CBC**: การเข้ารหัสแบบสมมาตรที่ใช้กันแพร่หลาย
 - **RSA Digital Signature**: การยืนยันความถูกต้องของข้อมูล
 - **SHA-256**: ฟังก์ชัน hash ที่ใช้สร้าง key และ flag
@@ -356,15 +352,18 @@ curl -X POST http://localhost:3001/api/c3/submit-flag \
 
 ---
 
-## เกณฑ์การให้คะแนน (ปรับปรุง)
+## เกณฑ์การให้คะแนน
 
 ### ด่าน 1 (35 คะแนน)
-- ใช้ easy-decrypt หรือทำ DH เอง: 15 คะแนน
-- สร้าง FLAG_1 ถูกต้อง: 15 คะแนน
+- ทำ Diffie-Hellman Exchange: 10 คะแนน
+- ถอดรหัส Caesar Cipher: 5 คะแนน
+- ถอดรหัส AES: 10 คะแนน
+- สร้าง FLAG_1 ถูกต้อง: 5 คะแนน
 - อธิบายหลักการ: 5 คะแนน
 
 ### ด่าน 2 (30 คะแนน)
-- ยืนยันรหัสผ่าน: 15 คะแนน
+- ยืนยัน OTP: 5 คะแนน
+- ยืนยันรหัสผ่าน: 10 คะแนน
 - ยืนยัน PIN: 10 คะแนน
 - อธิบาย MFA: 5 คะแนน
 
@@ -397,8 +396,9 @@ curl http://localhost:3001/api/admin/audit \
 
 | ค่า | ความหมาย |
 |-----|----------|
-| 1990 | ปีก่อตั้ง มทส. |
+| 27072533 | วันก่อตั้ง มทส. (27 ก.ค. 2533) |
 | 30000 | รหัสไปรษณีย์นครราชสีมา |
 | computer_engineering_#28! | รหัสผ่านด่าน 2 (ใบ้แบบสลับตัวอักษร) |
-| SUT1990 | Salt สำหรับ AES key |
+| suranaree | Salt สำหรับ AES key (จาก Caesar cipher) |
+| jlirerivv | Salt cipher (shift 17 → suranaree) |
 | MUT_ADMIN_1990 | Admin key |

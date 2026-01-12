@@ -15,6 +15,7 @@
   --text-yellow: #ffff00;
   --text-red: #ff4444;
   --text-orange: #ff8c00;
+  --text-magenta: #ff00ff;
 
   --border-color: #30363d;
   --border-glow: #00ff00;
@@ -326,6 +327,22 @@ body {
   background: var(--text-yellow);
   color: var(--bg-primary);
   box-shadow: 0 0 20px rgba(255, 255, 0, 0.5);
+}
+
+.btn-small {
+  font-size: 0.8rem;
+  padding: var(--spacing-xs) var(--spacing-md);
+}
+
+.btn-magenta {
+  border-color: var(--text-magenta);
+  color: var(--text-magenta);
+}
+
+.btn-magenta:hover {
+  background: var(--text-magenta);
+  color: var(--bg-primary);
+  box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);
 }
 
 /* Forms */

@@ -4,6 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { Terminal, TerminalLine } from '../components/common/Terminal';
 import { ChallengeProgress } from '../components/common/ChallengeProgress';
+import { CryptoCalculator } from '../components/CryptoCalculator';
 import api from '../services/api';
 
 export function Challenge1() {
@@ -103,7 +104,7 @@ export function Challenge1() {
             {step >= 4 ? '✓' : '○'} 3. Derive AES key and decrypt message
           </TerminalLine>
           <TerminalLine type="output">
-            {step >= 5 ? '✓' : '○'} 4. Verify RSA signature
+            {step >= 5 ? '✓' : '○'} 4. Get RSA signature
           </TerminalLine>
           <TerminalLine type="output">
             {step >= 6 ? '✓' : '○'} 5. Generate and submit FLAG_1
@@ -123,123 +124,23 @@ export function Challenge1() {
           </div>
         )}
 
-        {/* Artifacts Display */}
+        {/* Artifacts Downloaded Message */}
         {artifacts && (
           <div className="mt-3">
             <TerminalLine type="output">
               <span className="text-green">[ARTIFACTS DOWNLOADED]</span>
             </TerminalLine>
-
-            <div className="code-block mt-2">
-              <TerminalLine type="output">
-                <span className="text-yellow">Diffie-Hellman Parameters:</span>
-              </TerminalLine>
-              <TerminalLine type="output">
-                <span className="text-dim">Prime (p):</span> {artifacts.diffieHellman?.prime?.substring(0, 64)}...
-              </TerminalLine>
-              <TerminalLine type="output">
-                <span className="text-dim">Generator (g):</span> {artifacts.diffieHellman?.generator}
-              </TerminalLine>
-              <TerminalLine type="output">
-                <span className="text-cyan">Hint:</span> {artifacts.diffieHellman?.hint?.[language] || artifacts.diffieHellman?.hint?.en}
-              </TerminalLine>
-            </div>
-
-            <div className="code-block mt-2">
-              <TerminalLine type="output">
-                <span className="text-yellow">RSA Public Key:</span>
-              </TerminalLine>
-              <TerminalLine type="output">
-                <span className="text-dim">{artifacts.rsa?.publicKey?.substring(0, 100)}...</span>
-              </TerminalLine>
-            </div>
-
-            <div className="code-block mt-2">
-              <TerminalLine type="output">
-                <span className="text-yellow">AES IV:</span> {artifacts.aes?.iv}
-              </TerminalLine>
-              <TerminalLine type="output">
-                <span className="text-cyan">Hint:</span> {artifacts.aes?.hint?.[language] || artifacts.aes?.hint?.en}
-              </TerminalLine>
-            </div>
           </div>
         )}
 
-        {/* API Info */}
+        {/* Crypto Calculator */}
         {artifacts && step < 6 && (
-          <div className="mt-3 card">
-            <div className="card-title">API SERVER</div>
-            <div className="card-content">
-              <TerminalLine type="output">
-                <span className="text-cyan">Base URL: </span>
-                <span className="text-yellow">http://localhost:3001</span>
-              </TerminalLine>
-              <TerminalLine type="output">
-                <span className="text-dim">
-                  {language === 'en'
-                    ? 'Use curl, Postman, or any HTTP client to call the API'
-                    : 'ใช้ curl, Postman หรือ HTTP client ใดก็ได้ในการเรียก API'}
-                </span>
-              </TerminalLine>
-            </div>
-          </div>
-        )}
-
-        {/* Easy Mode Hint */}
-        {artifacts && step < 6 && (
-          <div className="mt-3 card" style={{ borderColor: 'var(--text-green)' }}>
-            <div className="card-title" style={{ color: 'var(--text-green)' }}>
-              {language === 'en' ? 'EASY MODE' : 'โหมดง่าย'}
-            </div>
-            <div className="card-content">
-              <TerminalLine type="output">
-                <span className="text-green">
-                  {language === 'en'
-                    ? 'Try: GET /api/c1/easy-decrypt'
-                    : 'ลอง: GET /api/c1/easy-decrypt'}
-                </span>
-              </TerminalLine>
-              <TerminalLine type="output">
-                <span className="text-dim">
-                  {language === 'en'
-                    ? 'This endpoint will help you skip the complex cryptography steps.'
-                    : 'endpoint นี้จะช่วยข้ามขั้นตอน cryptography ที่ซับซ้อน'}
-                </span>
-              </TerminalLine>
-            </div>
-          </div>
-        )}
-
-        {/* Hard Mode Instructions */}
-        {artifacts && step < 6 && (
-          <div className="mt-3 card">
-            <div className="card-title">
-              {language === 'en' ? 'HARD MODE (Manual cryptography)' : 'โหมดยาก (ทำ cryptography เอง)'}
-            </div>
-            <div className="card-content">
-              <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem' }}>
-                {language === 'en' ? `
-1. Generate your DH private key (random number)
-2. Compute public key: A = g^a mod p
-3. POST /api/c1/dh/exchange with your public key
-4. Compute shared secret: S = server_public^a mod p
-5. Derive AES key: SHA256(shared_secret + "SUT1990")[:32]
-6. GET /api/c1/encrypted - decrypt with AES-256-CBC
-7. GET /api/c1/signature - verify with RSA public key
-8. FLAG_1 = MUT{SHA256(message + "1990" + signature)[:32]}
-                ` : `
-1. สร้าง DH private key (ตัวเลขสุ่ม)
-2. คำนวณ public key: A = g^a mod p
-3. POST /api/c1/dh/exchange พร้อม public key ของคุณ
-4. คำนวณ shared secret: S = server_public^a mod p
-5. สร้าง AES key: SHA256(shared_secret + "SUT1990")[:32]
-6. GET /api/c1/encrypted - ถอดรหัสด้วย AES-256-CBC
-7. GET /api/c1/signature - ตรวจสอบด้วย RSA public key
-8. FLAG_1 = MUT{SHA256(message + "1990" + signature)[:32]}
-                `}
-              </pre>
-            </div>
-          </div>
+          <CryptoCalculator
+            artifacts={artifacts}
+            language={language}
+            api={api}
+            onStepComplete={(completedStep) => setStep(Math.max(step, completedStep))}
+          />
         )}
 
         {/* Flag Submission */}

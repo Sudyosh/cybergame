@@ -59,8 +59,15 @@ export function AuthProvider({ children }) {
   };
 
   const register = async (username, email, password) => {
-    const response = await api.post('/api/auth/register', { username, email, password });
-    return response.data;
+    console.log('[Auth] Registering user:', { username, email });
+    try {
+      const response = await api.post('/api/auth/register', { username, email, password });
+      console.log('[Auth] Registration response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('[Auth] Registration error:', error.response?.data || error.message);
+      throw error;
+    }
   };
 
   const startSession = async () => {

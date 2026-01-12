@@ -269,11 +269,12 @@ export function Challenge2() {
               </TerminalLine>
               <div className="form-group mt-2">
                 <input
-                  type="password"
+                  type="text"
                   className="form-input"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={language === 'en' ? 'Enter password' : 'กรอกรหัสผ่าน'}
+                  style={{ fontFamily: 'monospace' }}
                 />
               </div>
               <button className="btn" onClick={handleVerifyPassword} disabled={loading}>
