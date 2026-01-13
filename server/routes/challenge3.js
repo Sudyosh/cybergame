@@ -274,9 +274,6 @@ router.get('/attributes', (req, res) => {
   });
 });
 
-// POST /api/c3/attributes - Update attribute (VULNERABLE!)
-router.post('/attributes', abacMiddleware.updateAttributeEndpoint());
-
 // POST /api/c3/request-access - Request delegation (VULNERABLE!)
 router.post('/request-access', (req, res) => {
   try {

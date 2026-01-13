@@ -363,18 +363,6 @@ GET /api/c3/attributes
 Authorization: Bearer <session_token>
 ```
 
-### อัปเดต Attributes (มีช่องโหว่)
-```http
-POST /api/c3/attributes
-Authorization: Bearer <session_token>
-Content-Type: application/json
-
-{
-  "attribute": "clearance_training",
-  "value": "complete"
-}
-```
-
 ### ขอสิทธิ์เข้าถึง (มีช่องโหว่)
 ```http
 POST /api/c3/request-access

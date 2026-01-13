@@ -245,6 +245,20 @@ export function Challenge3() {
               </span>
             </TerminalLine>
 
+            <div className="mt-2 code-block" style={{ padding: '10px', background: '#0a0a0a', border: '1px solid #00ff00' }}>
+              <TerminalLine type="output">
+                <span className="text-green">API Base URL:</span>{' '}
+                <span className="text-yellow" style={{ fontFamily: 'monospace' }}>http://localhost:3001</span>
+              </TerminalLine>
+              <TerminalLine type="output">
+                <span className="text-dim" style={{ fontSize: '0.85rem' }}>
+                  {language === 'en'
+                    ? 'Include your session token in Authorization header: Bearer <token>'
+                    : 'ใส่ session token ใน Authorization header: Bearer <token>'}
+                </span>
+              </TerminalLine>
+            </div>
+
             <div className="mt-2" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {/* Vulnerability 1 */}
               <div className="code-block" style={{ padding: '10px', background: '#111', borderLeft: '3px solid #ffff00' }}>
@@ -268,30 +282,9 @@ export function Challenge3() {
               </div>
 
               {/* Vulnerability 2 */}
-              <div className="code-block" style={{ padding: '10px', background: '#111', borderLeft: '3px solid #00ffff' }}>
-                <TerminalLine type="output">
-                  <span className="text-cyan">2. Attribute Injection</span>
-                </TerminalLine>
-                <TerminalLine type="output">
-                  <span className="text-dim">
-                    {language === 'en'
-                      ? 'No authorization check when updating attributes'
-                      : 'ไม่ตรวจสอบสิทธิ์เมื่ออัพเดท attribute'}
-                  </span>
-                </TerminalLine>
-                <pre className="mt-1" style={{ color: '#00ff00', fontSize: '0.85rem' }}>
-{`POST /api/c3/attributes
-{
-  "attribute": "???",
-  "value": "???"
-}`}
-                </pre>
-              </div>
-
-              {/* Vulnerability 3 */}
               <div className="code-block" style={{ padding: '10px', background: '#111', borderLeft: '3px solid #ff6600' }}>
                 <TerminalLine type="output">
-                  <span style={{ color: '#ff6600' }}>3. Time Header Bypass</span>
+                  <span style={{ color: '#ff6600' }}>2. Time Header Bypass</span>
                 </TerminalLine>
                 <TerminalLine type="output">
                   <span className="text-dim">
@@ -306,10 +299,10 @@ Headers: X-System-Time: ???`}
                 </pre>
               </div>
 
-              {/* Vulnerability 4 */}
+              {/* Vulnerability 3 */}
               <div className="code-block" style={{ padding: '10px', background: '#111', borderLeft: '3px solid #ff0066' }}>
                 <TerminalLine type="output">
-                  <span style={{ color: '#ff0066' }}>4. Declassification Bug</span>
+                  <span style={{ color: '#ff0066' }}>3. Declassification Bug</span>
                 </TerminalLine>
                 <TerminalLine type="output">
                   <span className="text-dim">

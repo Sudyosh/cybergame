@@ -251,43 +251,53 @@ MUT Secure Vault เป็นเกม Capture The Flag (CTF) แบบเรื
    - ดูกฎการเข้าถึงต่างๆ
    - ดูทรัพยากรที่มีอยู่
 
-ขั้นตอน 3: ใช้ช่องโหว่ที่ 1 - Privilege Escalation
+ขั้นตอน 3: ใช้ช่องโหว่ที่ 1 - Delegation Flaw
    - ส่งคำขอเข้าถึงทรัพยากร (Request Access)
    - ช่องโหว่: ระบบจะเลื่อนบทบาทแทนที่จะแค่ให้สิทธิ์ชั่วคราว
    - คุณจะได้เลื่อนจาก Student เป็น Researcher
 
-ขั้นตอน 4: ใช้ช่องโหว่ที่ 2 - Time Header Bypass
-   - ระบบมี Maintenance Window เวลา 02:00-03:00
-   - ช่วง Maintenance จะลดการตรวจสอบความปลอดภัย
-   - ช่องโหว่: สามารถส่ง Header X-System-Time: "02:30"
-   - ระบบจะเชื่อว่าอยู่ในช่วง Maintenance
-   - ใช้ Declassify เพื่อลดระดับความลับของไฟล์
+ขั้นตอน 4: ใช้ช่องโหว่ที่ 2 - Declassification Bug
+   - ช่องโหว่: ระบบเชื่อ requester_role จาก body โดยไม่ตรวจสอบ
+   - ใช้ Declassify โดยอ้างว่าเป็น Director
+   - ระบบจะให้เข้าถึงไฟล์ลับที่สุด
 
 ขั้นตอน 5: เข้าถึง Final Flag
    - หลังจาก Declassify แล้ว
    - ดึงไฟล์ FINAL_FLAG
    - ส่ง FLAG เพื่อจบเกม
 
+ทางเลือก: ช่องโหว่ที่ 3 - Time Header Bypass
+   - ระบบมี Maintenance Window เวลา 02:00-03:00
+   - ช่องโหว่: สามารถส่ง Header X-System-Time: "02:30"
+   - ระบบจะ bypass การตรวจสอบความปลอดภัย
+   - เข้าถึงทรัพยากรได้โดยตรงผ่าน GET /api/c3/resources/{id}
+
 วิธีใช้ช่องโหว่ (Technical Details):
 --------------------------------------------------------------------------------
-ช่องโหว่ที่ 1: Privilege Escalation
+ช่องโหว่ที่ 1: Delegation Flaw
 
    ส่ง POST request ไปที่ /api/c3/request-access
    Body: { "resource": "any", "reason": "any" }
 
    ผลลัพธ์: บทบาทจะเลื่อนจาก Student เป็น Researcher
 
-ช่องโหว่ที่ 2: Declassification Bypass
+ช่องโหว่ที่ 2: Declassification Bug
 
    ส่ง POST request ไปที่ /api/c3/declassify
-   Headers: X-System-Time: "02:30"
    Body: {
      "resource": "FINAL_FLAG.txt",
      "requester_role": "Director",
      "reason": "any"
    }
 
-   ผลลัพธ์: ไฟล์ FINAL_FLAG จะถูก declassify
+   ผลลัพธ์: ได้เนื้อหาไฟล์ FINAL_FLAG โดยตรง
+
+ช่องโหว่ที่ 3: Time Header Bypass (ทางเลือก)
+
+   ส่ง GET request ไปที่ /api/c3/resources/4
+   Headers: X-System-Time: "02:30"
+
+   ผลลัพธ์: เข้าถึงไฟล์ Top Secret ได้โดยตรง
 
 ================================================================================
 7. เคล็ดลับและคำแนะนำ
