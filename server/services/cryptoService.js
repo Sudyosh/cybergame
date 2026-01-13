@@ -190,11 +190,7 @@ class CryptoService {
   }
 
   generateSecretMessage() {
-    return `THE LEGACY OF SURANAREE LIVES ON.
-Established in ${this.sutYear}, the university stands as a beacon of knowledge.
-Located in Nakhon Ratchasima, Thailand, with postal code 30000.
-This message has been protected by the sacred cryptographic arts.
-VERIFICATION CODE: SUT_LEGACY_${this.sutYear}_VERIFIED`;
+    return `THE LEGACY OF SURANAREE LIVES ON. Established in ${this.sutYear}, the university stands as a beacon of knowledge. Located in Nakhon Ratchasima, Thailand, with postal code 30000. This message has been protected by the sacred cryptographic arts. VERIFICATION CODE: SUT_LEGACY_${this.sutYear}_VERIFIED`;
   }
 
   // Complete artifacts with encrypted data after DH exchange
