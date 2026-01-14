@@ -60,21 +60,6 @@ router.get('/status', (req, res) => {
       });
     }
 
-    // Check if locked
-    if (authState.locked_until) {
-      const lockTime = new Date(authState.locked_until);
-      if (lockTime > new Date()) {
-        return res.json({
-          locked: true,
-          lockedUntil: authState.locked_until,
-          message: {
-            en: 'Account temporarily locked due to failed attempts',
-            th: 'บัญชีถูกล็อคชั่วคราวเนื่องจากลองผิดหลายครั้ง'
-          }
-        });
-      }
-    }
-
     const emailVerified = !!authState.otp_verified; // reuse otp_verified for email OTP
     const passwordVerified = !!authState.password_verified;
     const pinVerified = !!authState.pin_verified;
@@ -82,7 +67,20 @@ router.get('/status', (req, res) => {
     // Generate envelope hint
     const envelopeHint = emailService.generateEnvelopeHint();
 
+    // Check if locked
+    let locked = false;
+    let lockedUntil = null;
+    if (authState.locked_until) {
+      const lockTime = new Date(authState.locked_until);
+      if (lockTime > new Date()) {
+        locked = true;
+        lockedUntil = authState.locked_until;
+      }
+    }
+
     res.json({
+      locked,
+      lockedUntil,
       factors: {
         email: {
           verified: emailVerified,
@@ -110,7 +108,11 @@ router.get('/status', (req, res) => {
         }
       },
       mfaComplete: !!(emailVerified && passwordVerified && pinVerified),
-      progress: `${[emailVerified, passwordVerified, pinVerified].filter(Boolean).length}/3 factors complete`
+      progress: `${[emailVerified, passwordVerified, pinVerified].filter(Boolean).length}/3 factors complete`,
+      message: locked ? {
+        en: 'Account temporarily locked due to failed attempts',
+        th: 'บัญชีถูกล็อคชั่วคราวเนื่องจากลองผิดหลายครั้ง'
+      } : null
     });
 
   } catch (error) {

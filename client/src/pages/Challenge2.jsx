@@ -108,6 +108,7 @@ export function Challenge2() {
       await fetchStatus();
     } catch (err) {
       setError(err.response?.data?.message || err.response?.data?.hint?.[language] || 'Failed');
+      await fetchStatus(); // Refresh status to update attempts count
     }
     setLoading(false);
   };
@@ -289,31 +290,57 @@ export function Challenge2() {
           <div className="mt-3 card">
             <div className="card-title">FACTOR 3: PIN</div>
             <div className="card-content">
-              <TerminalLine type="output">
-                <span className="text-dim">
-                  {language === 'en'
-                    ? 'Enter the 5-digit PIN to complete authentication'
-                    : 'กรอก PIN 5 หลักเพื่อยืนยันตัวตน'}
-                </span>
-              </TerminalLine>
-              <TerminalLine type="output">
-                <span className="text-yellow">
-                  {language === 'en' ? 'Attempts' : 'ครั้งที่ลอง'}: {factors.pin?.attempts || 0}/{factors.pin?.maxAttempts || 3}
-                </span>
-              </TerminalLine>
-              <div className="form-group mt-2">
-                <input
-                  type="text"
-                  className="form-input"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  placeholder={language === 'en' ? 'Enter 5-digit PIN' : 'กรอก PIN 5 หลัก'}
-                  maxLength={5}
-                />
-              </div>
-              <button className="btn" onClick={handleVerifyPin} disabled={loading}>
-                {loading ? 'VERIFYING...' : language === 'en' ? 'VERIFY PIN' : 'ยืนยัน PIN'}
-              </button>
+              {status?.locked ? (
+                <>
+                  <TerminalLine type="error">
+                    <span className="text-red">
+                      {language === 'en'
+                        ? 'ACCOUNT LOCKED - Too many failed attempts'
+                        : 'บัญชีถูกล็อค - ลองผิดหลายครั้งเกินไป'}
+                    </span>
+                  </TerminalLine>
+                  <TerminalLine type="output">
+                    <span className="text-yellow">
+                      {language === 'en' ? 'Locked until' : 'ล็อคจนถึง'}: {new Date(status.lockedUntil).toLocaleTimeString()}
+                    </span>
+                  </TerminalLine>
+                  <TerminalLine type="output">
+                    <span className="text-dim">
+                      {language === 'en'
+                        ? 'Please wait and try again later.'
+                        : 'กรุณารอแล้วลองใหม่อีกครั้ง'}
+                    </span>
+                  </TerminalLine>
+                </>
+              ) : (
+                <>
+                  <TerminalLine type="output">
+                    <span className="text-dim">
+                      {language === 'en'
+                        ? 'Enter the 5-digit PIN to complete authentication'
+                        : 'กรอก PIN 5 หลักเพื่อยืนยันตัวตน'}
+                    </span>
+                  </TerminalLine>
+                  <TerminalLine type="output">
+                    <span className="text-yellow">
+                      {language === 'en' ? 'Attempts' : 'ครั้งที่ลอง'}: {factors.pin?.attempts || 0}/{factors.pin?.maxAttempts || 3}
+                    </span>
+                  </TerminalLine>
+                  <div className="form-group mt-2">
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={pin}
+                      onChange={(e) => setPin(e.target.value)}
+                      placeholder={language === 'en' ? 'Enter 5-digit PIN' : 'กรอก PIN 5 หลัก'}
+                      maxLength={5}
+                    />
+                  </div>
+                  <button className="btn" onClick={handleVerifyPin} disabled={loading}>
+                    {loading ? 'VERIFYING...' : language === 'en' ? 'VERIFY PIN' : 'ยืนยัน PIN'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}
