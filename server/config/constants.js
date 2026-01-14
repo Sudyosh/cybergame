@@ -22,7 +22,7 @@ export const CRYPTO_CONFIG = {
     publicExponent: 65537
   },
   dh: {
-    primeLength: 2048
+    primeLength: 512
   },
   hash: {
     algorithm: 'sha256'

@@ -1,7 +1,7 @@
 /* MUT Secure Vault - Terminal/Hacker Theme */
 
 :root {
-  /* Colors */
+  /* Colors - Dark Theme (Default) */
   --bg-primary: #0a0a0a;
   --bg-secondary: #111111;
   --bg-terminal: #0d1117;
@@ -34,6 +34,130 @@
   --spacing-md: 1rem;
   --spacing-lg: 1.5rem;
   --spacing-xl: 2rem;
+}
+
+/* Light Theme */
+[data-theme="light"] {
+  --bg-primary: #f0f4f8;
+  --bg-secondary: #ffffff;
+  --bg-terminal: #ffffff;
+  --bg-card: #ffffff;
+
+  --text-primary: #2563eb;
+  --text-secondary: #3b82f6;
+  --text-dim: #64748b;
+  --text-white: #1e293b;
+  --text-cyan: #0891b2;
+  --text-yellow: #ca8a04;
+  --text-red: #dc2626;
+  --text-orange: #ea580c;
+  --text-magenta: #c026d3;
+
+  --border-color: #e2e8f0;
+  --border-glow: #2563eb;
+
+  --accent-green: #2563eb;
+  --accent-cyan: #0891b2;
+  --accent-red: #dc2626;
+}
+
+/* Light theme specific overrides */
+[data-theme="light"] .header {
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .terminal {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .card {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .btn:hover {
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+[data-theme="light"] .glow {
+  text-shadow: none;
+  font-weight: 600;
+}
+
+[data-theme="light"] .flag-display {
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+  animation: pulse-light 2s infinite;
+}
+
+@keyframes pulse-light {
+  0%, 100% { box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2); }
+  50% { box-shadow: 0 4px 20px rgba(37, 99, 235, 0.4); }
+}
+
+[data-theme="light"] .form-input {
+  background: #f8fafc;
+}
+
+[data-theme="light"] .form-input:focus {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+[data-theme="light"] .nav-link:hover,
+[data-theme="light"] .nav-link.active {
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+}
+
+[data-theme="light"] .challenge-step.completed {
+  background: rgba(37, 99, 235, 0.1);
+  border-color: var(--text-primary);
+}
+
+[data-theme="light"] .challenge-step.active {
+  background: rgba(8, 145, 178, 0.1);
+  border-color: var(--text-cyan);
+  box-shadow: 0 2px 8px rgba(8, 145, 178, 0.2);
+}
+
+[data-theme="light"] .status-success {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: #22c55e;
+  color: #16a34a;
+}
+
+[data-theme="light"] .status-error {
+  background: rgba(220, 38, 38, 0.1);
+}
+
+[data-theme="light"] .status-warning {
+  background: rgba(202, 138, 4, 0.1);
+}
+
+[data-theme="light"] .status-info {
+  background: rgba(8, 145, 178, 0.1);
+}
+
+[data-theme="light"] .code-block {
+  background: #f1f5f9;
+}
+
+[data-theme="light"] .table th {
+  background: #f1f5f9;
+}
+
+[data-theme="light"] .table tr:hover {
+  background: rgba(37, 99, 235, 0.05);
+}
+
+[data-theme="light"] ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 /* Global Reset */
@@ -471,6 +595,33 @@ body {
   );
   pointer-events: none;
   z-index: 10;
+}
+
+/* Disable scanlines in light theme */
+[data-theme="light"] .scanlines::before {
+  display: none;
+}
+
+/* Theme Toggle Button */
+.theme-toggle {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-dim);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 32px;
+}
+
+.theme-toggle:hover {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
 }
 
 /* Glow Effect */

@@ -2,10 +2,12 @@ import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 
 export function Header() {
   const { language, toggleLanguage, t } = useLanguage();
   const { isAuthenticated, user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -57,6 +59,13 @@ export function Header() {
       </nav>
 
       <div className="lang-switch">
+        <button
+          className="theme-toggle"
+          onClick={toggleTheme}
+          title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        >
+          {theme === 'dark' ? '☀' : '☾'}
+        </button>
         <button
           className={`lang-btn ${language === 'en' ? 'active' : ''}`}
           onClick={() => language !== 'en' && toggleLanguage()}
